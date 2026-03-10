@@ -5,6 +5,7 @@ export type ProviderName =
   | "openrouter"
   | "anthropic"
   | "groq"
+  | "zai"
   | "ollama";
 
 export interface LlmMessage {

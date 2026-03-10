@@ -4,6 +4,7 @@ import { DeepSeekProvider } from "./deepseek.provider";
 import { OpenRouterProvider } from "./openrouter.provider";
 import { AnthropicProvider } from "./anthropic.provider";
 import { GroqProvider } from "./groq.provider";
+import { ZAiProvider } from "./zai.provider";
 import { OllamaProvider } from "./ollama.provider";
 import { ProviderRegistry } from "./provider-registry";
 import { ILlmProvider } from "./provider.interface";
@@ -23,7 +24,7 @@ export class ProviderFactory {
 
   constructor() {
     this.defaultProvider = (process.env.DEFAULT_LLM_PROVIDER || "gemini") as ProviderName;
-    this.fallbackOrder = ((process.env.LLM_FALLBACK_ORDER || "gemini,openai,deepseek,openrouter,anthropic,groq,ollama")
+    this.fallbackOrder = ((process.env.LLM_FALLBACK_ORDER || "gemini,openai,deepseek,openrouter,anthropic,groq,zai,ollama")
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean)) as ProviderName[];
@@ -108,7 +109,15 @@ export class ProviderFactory {
     this.registry.register(
       new GroqProvider(
         parseKeys(process.env.GROQ_API_KEYS),
-        process.env.GROQ_MODEL || "llama3-70b"
+        process.env.GROQ_MODEL || "llama-3.3-70b-versatile"
+      )
+    );
+
+    this.registry.register(
+      new ZAiProvider(
+        parseKeys(process.env.ZAI_API_KEYS),
+        process.env.ZAI_BASE_URL || "https://api.z.ai/api/paas/v4",
+        process.env.ZAI_MODEL || "glm-5"
       )
     );
 

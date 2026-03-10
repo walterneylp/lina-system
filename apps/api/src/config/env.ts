@@ -52,9 +52,18 @@ const parseDotEnv = (): Record<string, string> => {
 const readEnvValue = (fileEnv: Record<string, string>, key: string): string | undefined =>
   process.env[key] || fileEnv[key];
 
+const hydrateProcessEnv = (fileEnv: Record<string, string>): void => {
+  for (const [key, value] of Object.entries(fileEnv)) {
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+};
+
 export const loadEnv = (): LinaEnv => ({
   ...(() => {
     const fileEnv = parseDotEnv();
+    hydrateProcessEnv(fileEnv);
     return {
       appName: readEnvValue(fileEnv, "APP_NAME") || "LiNa",
       appEnv: readEnvValue(fileEnv, "APP_ENV") || "development",
@@ -64,7 +73,7 @@ export const loadEnv = (): LinaEnv => ({
       supabaseAnonKey: readEnvValue(fileEnv, "SUPABASE_ANON_KEY"),
       supabaseServiceRoleKey: readEnvValue(fileEnv, "SUPABASE_SERVICE_ROLE_KEY"),
       defaultProvider: readEnvValue(fileEnv, "DEFAULT_LLM_PROVIDER") || "gemini",
-      fallbackOrder: (readEnvValue(fileEnv, "LLM_FALLBACK_ORDER") || "gemini,openai,deepseek,openrouter,anthropic,groq,ollama")
+      fallbackOrder: (readEnvValue(fileEnv, "LLM_FALLBACK_ORDER") || "gemini,openai,deepseek,openrouter,anthropic,groq,zai,ollama")
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean),
