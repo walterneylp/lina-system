@@ -38,7 +38,7 @@ export class SupabaseMemoryStore implements MemoryStore {
     }
   }
 
-  public async appendMessage(role: MemoryRole, content: string): Promise<ConversationMessage> {
+  public async createConversation(): Promise<{ id: string; createdAt: string }> {
     const { data: conversation, error: conversationError } = await this.client
       .from("conversations")
       .insert({})
@@ -49,10 +49,24 @@ export class SupabaseMemoryStore implements MemoryStore {
       throw new Error(`Failed to create conversation: ${conversationError?.message || "unknown error"}`);
     }
 
+    return {
+      id: conversation.id,
+      createdAt: conversation.created_at,
+    };
+  }
+
+  public async appendMessage(
+    role: MemoryRole,
+    content: string,
+    conversationId?: string
+  ): Promise<ConversationMessage> {
+    const activeConversation =
+      conversationId ? { id: conversationId } : await this.createConversation();
+
     const { data, error } = await this.client
       .from("messages")
       .insert({
-        conversation_id: conversation.id,
+        conversation_id: activeConversation.id,
         role,
         content,
       })

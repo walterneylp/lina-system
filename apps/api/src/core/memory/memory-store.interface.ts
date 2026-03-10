@@ -2,7 +2,12 @@ import { ConversationMessage, LinaTaskRecord, MemoryRole, PersistenceHealth } fr
 
 export interface MemoryStore {
   getHealth(): Promise<PersistenceHealth>;
-  appendMessage(role: MemoryRole, content: string): Promise<ConversationMessage>;
+  createConversation(): Promise<{ id: string; createdAt: string }>;
+  appendMessage(
+    role: MemoryRole,
+    content: string,
+    conversationId?: string
+  ): Promise<ConversationMessage>;
   listMessages(): Promise<ConversationMessage[]>;
   createTask(task: LinaTaskRecord): Promise<LinaTaskRecord>;
   listTasks(): Promise<LinaTaskRecord[]>;

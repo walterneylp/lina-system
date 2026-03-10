@@ -2,14 +2,27 @@ import { MemoryStore } from "./memory-store.interface";
 import { ConversationMessage, LinaTaskRecord, MemoryRole, PersistenceHealth } from "./memory.types";
 
 export class MemoryManager {
+  private activeConversationId?: string;
+
   constructor(private readonly store: MemoryStore) {}
 
   public async getHealth(): Promise<PersistenceHealth> {
     return this.store.getHealth();
   }
 
+  public async ensureConversation(): Promise<string> {
+    if (this.activeConversationId) {
+      return this.activeConversationId;
+    }
+
+    const conversation = await this.store.createConversation();
+    this.activeConversationId = conversation.id;
+    return conversation.id;
+  }
+
   public async append(role: MemoryRole, content: string): Promise<ConversationMessage> {
-    return this.store.appendMessage(role, content);
+    const conversationId = await this.ensureConversation();
+    return this.store.appendMessage(role, content, conversationId);
   }
 
   public async getConversation(): Promise<ConversationMessage[]> {

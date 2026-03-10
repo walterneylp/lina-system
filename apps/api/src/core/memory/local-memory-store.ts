@@ -27,10 +27,22 @@ export class LocalMemoryStore implements MemoryStore {
     };
   }
 
-  public async appendMessage(role: MemoryRole, content: string): Promise<ConversationMessage> {
+  public async createConversation(): Promise<{ id: string; createdAt: string }> {
+    return {
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  public async appendMessage(
+    role: MemoryRole,
+    content: string,
+    conversationId?: string
+  ): Promise<ConversationMessage> {
     const state = this.load();
     const message: ConversationMessage = {
       id: randomUUID(),
+      conversationId,
       role,
       content,
       createdAt: new Date().toISOString(),
