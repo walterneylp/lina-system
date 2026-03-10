@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.DS_Store
+.env
+task_plan.md
+findings.md
+progress.md
+tmp/memory/
+logs/*.log
+workspace/*
+!workspace/.gitkeep
+tmp/*
+!tmp/.gitkeep
+logs/*
+!logs/.gitkeep

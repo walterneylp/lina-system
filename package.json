@@ -1,0 +1,20 @@
+{
+  "name": "lina-ai-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LiNa AI System monorepo bootstrap",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "tsx apps/api/src/index.ts",
+    "check:structure": "node scripts/ops/check-structure.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.2"
+  }
+}
