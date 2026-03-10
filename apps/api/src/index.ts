@@ -1,7 +1,7 @@
 import { loadEnv } from "./config/env";
 import { AgentLoop } from "./core/agent-loop/agent-loop";
 import { MemoryManager } from "./core/memory/memory-manager";
-import { createMemoryStore } from "./core/memory/memory-store.factory";
+import { createMemoryStoreWithFallback } from "./core/memory/memory-store.factory";
 import { LinaOrchestrator } from "./core/orchestrator/orchestrator";
 import { ProviderFactory } from "./core/providers/provider-factory";
 import { SkillLoader } from "./core/skills/skill-loader";
@@ -13,16 +13,16 @@ import { TelegramPollingRunner } from "./telegram/telegram-polling-runner";
 
 const env = loadEnv();
 const providerFactory = new ProviderFactory();
-const memoryStore = createMemoryStore(env);
-const memoryManager = new MemoryManager(memoryStore);
 const skillLoader = new SkillLoader(env.skillsDirectory);
 const agentLoop = new AgentLoop({
   providerFactory,
   maxIterations: env.maxIterations,
 });
-const orchestrator = new LinaOrchestrator(agentLoop, skillLoader);
 
 export const bootstrapLiNa = async () => {
+  const memoryStore = await createMemoryStoreWithFallback(env);
+  const memoryManager = new MemoryManager(memoryStore);
+  const orchestrator = new LinaOrchestrator(agentLoop, skillLoader);
   const status = {
     appName: env.appName,
     environment: env.appEnv,

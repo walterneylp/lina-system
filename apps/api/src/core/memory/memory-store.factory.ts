@@ -13,3 +13,17 @@ export const createMemoryStore = (env: LinaEnv): MemoryStore => {
 
   return new LocalMemoryStore();
 };
+
+export const createMemoryStoreWithFallback = async (env: LinaEnv): Promise<MemoryStore> => {
+  const primaryStore = createMemoryStore(env);
+  const health = await primaryStore.getHealth();
+
+  if (health.provider === "supabase" && !health.connected) {
+    console.warn(
+      `[LiNa] Supabase unavailable or schema not ready (${health.details || "unknown"}). Falling back to local persistence.`
+    );
+    return new LocalMemoryStore();
+  }
+
+  return primaryStore;
+};
