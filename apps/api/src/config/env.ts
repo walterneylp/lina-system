@@ -5,6 +5,9 @@ export type LinaEnv = {
   appEnv: string;
   appPort: number;
   dashboardPort: number;
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+  supabaseServiceRoleKey?: string;
   defaultProvider: string;
   fallbackOrder: string[];
   maxIterations: number;
@@ -57,6 +60,9 @@ export const loadEnv = (): LinaEnv => ({
       appEnv: readEnvValue(fileEnv, "APP_ENV") || "development",
       appPort: parseInteger(readEnvValue(fileEnv, "APP_PORT"), 3000),
       dashboardPort: parseInteger(readEnvValue(fileEnv, "DASHBOARD_PORT"), 3001),
+      supabaseUrl: readEnvValue(fileEnv, "SUPABASE_URL"),
+      supabaseAnonKey: readEnvValue(fileEnv, "SUPABASE_ANON_KEY"),
+      supabaseServiceRoleKey: readEnvValue(fileEnv, "SUPABASE_SERVICE_ROLE_KEY"),
       defaultProvider: readEnvValue(fileEnv, "DEFAULT_LLM_PROVIDER") || "gemini",
       fallbackOrder: (readEnvValue(fileEnv, "LLM_FALLBACK_ORDER") || "gemini,openai,deepseek,openrouter,anthropic,groq,ollama")
         .split(",")

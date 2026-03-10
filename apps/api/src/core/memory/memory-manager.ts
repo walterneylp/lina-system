@@ -1,48 +1,30 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
-
-type ConversationMessage = {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string;
-  createdAt: string;
-};
+import { MemoryStore } from "./memory-store.interface";
+import { ConversationMessage, LinaTaskRecord, MemoryRole, PersistenceHealth } from "./memory.types";
 
 export class MemoryManager {
-  private readonly conversation: ConversationMessage[];
+  constructor(private readonly store: MemoryStore) {}
 
-  constructor(private readonly storagePath = "./tmp/memory/conversation.json") {
-    this.conversation = this.load();
+  public async getHealth(): Promise<PersistenceHealth> {
+    return this.store.getHealth();
   }
 
-  public append(role: ConversationMessage["role"], content: string): void {
-    this.conversation.push({
-      role,
-      content,
-      createdAt: new Date().toISOString(),
-    });
-    this.persist();
+  public async append(role: MemoryRole, content: string): Promise<ConversationMessage> {
+    return this.store.appendMessage(role, content);
   }
 
-  public getConversation(): ConversationMessage[] {
-    return [...this.conversation];
+  public async getConversation(): Promise<ConversationMessage[]> {
+    return this.store.listMessages();
   }
 
-  private load(): ConversationMessage[] {
-    if (!existsSync(this.storagePath)) {
-      return [];
-    }
-
-    try {
-      const raw = readFileSync(this.storagePath, "utf8");
-      const parsed = JSON.parse(raw) as ConversationMessage[];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
+  public async createTask(task: LinaTaskRecord): Promise<LinaTaskRecord> {
+    return this.store.createTask(task);
   }
 
-  private persist(): void {
-    mkdirSync(dirname(this.storagePath), { recursive: true });
-    writeFileSync(this.storagePath, JSON.stringify(this.conversation, null, 2));
+  public async listTasks(): Promise<LinaTaskRecord[]> {
+    return this.store.listTasks();
+  }
+
+  public async log(level: string, message: string): Promise<void> {
+    return this.store.log(level, message);
   }
 }

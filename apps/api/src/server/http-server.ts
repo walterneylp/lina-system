@@ -26,12 +26,22 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
     const { method = "GET", url = "/" } = request;
 
     if (method === "GET" && url === "/health") {
+      const persistence = await dependencies.memoryManager.getHealth();
       response.writeHead(200, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ status: "ok", app: dependencies.env.appName }));
+      response.end(
+        JSON.stringify({
+          status: persistence.connected ? "ok" : "degraded",
+          app: dependencies.env.appName,
+          persistence,
+        })
+      );
       return;
     }
 
     if (method === "GET" && url === "/status") {
+      const conversation = await dependencies.memoryManager.getConversation();
+      const tasks = await dependencies.memoryManager.listTasks();
+      const persistence = await dependencies.memoryManager.getHealth();
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(
         JSON.stringify({
@@ -39,7 +49,9 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
           environment: dependencies.env.appEnv,
           defaultProvider: dependencies.env.defaultProvider,
           maxIterations: dependencies.env.maxIterations,
-          conversationSize: dependencies.memoryManager.getConversation().length,
+          conversationSize: conversation.length,
+          tasksCount: tasks.length,
+          persistence,
         })
       );
       return;
@@ -61,12 +73,52 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
         return;
       }
 
-      dependencies.memoryManager.append("user", payload.text);
+      await dependencies.memoryManager.append("user", payload.text);
       const result = await dependencies.orchestrator.handle({ text: payload.text });
-      dependencies.memoryManager.append("assistant", result.answer);
+      await dependencies.memoryManager.append("assistant", result.answer);
 
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(JSON.stringify(result));
+      return;
+    }
+
+    if (method === "GET" && url === "/memory/messages") {
+      const messages = await dependencies.memoryManager.getConversation();
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(messages));
+      return;
+    }
+
+    if (method === "GET" && url === "/tasks") {
+      const tasks = await dependencies.memoryManager.listTasks();
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(tasks));
+      return;
+    }
+
+    if (method === "POST" && url === "/tasks") {
+      const rawBody = await readBody(request);
+      const payload = JSON.parse(rawBody || "{}") as {
+        title?: string;
+        status?: string;
+        assignedAgent?: string;
+      };
+
+      if (!payload.title) {
+        response.writeHead(400, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ error: "Missing `title` in request body." }));
+        return;
+      }
+
+      const task = await dependencies.memoryManager.createTask({
+        title: payload.title,
+        status: payload.status || "pending",
+        assignedAgent: payload.assignedAgent || null,
+      });
+      await dependencies.memoryManager.log("info", `Task created: ${task.title}`);
+
+      response.writeHead(201, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(task));
       return;
     }
 

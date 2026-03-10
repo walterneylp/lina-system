@@ -24,12 +24,12 @@ export class TelegramInputHandler {
       return;
     }
 
-    this.options.memoryManager.append("user", text);
+    await this.options.memoryManager.append("user", text);
     await this.options.client.sendChatAction(chatId, "typing");
 
     const result = await this.options.orchestrator.handle({ text });
 
-    this.options.memoryManager.append("assistant", result.answer);
+    await this.options.memoryManager.append("assistant", result.answer);
     await this.options.outputHandler.sendText(chatId, result.answer);
   }
 

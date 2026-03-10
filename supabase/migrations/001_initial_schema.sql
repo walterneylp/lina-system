@@ -19,6 +19,15 @@ create table if not exists tasks (
   created_at timestamptz not null default now()
 );
 
+create table if not exists executions (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid references tasks(id) on delete set null,
+  provider text,
+  status text not null default 'pending',
+  result_summary text,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists system_logs (
   id uuid primary key default gen_random_uuid(),
   level text not null,

@@ -8,7 +8,7 @@ This repository already includes:
 
 - multi-LLM provider factory with fallback and API key rotation
 - local HTTP API bootstrap
-- persistent local conversation memory fallback
+- persistence abstraction with local fallback and Supabase-ready store
 - skill loading from `./.agents/skills`
 - Telegram polling integration using the Bot API directly
 - canonical architecture documents under `docs/architecture`
@@ -59,6 +59,9 @@ npm run dev:api
 - `GET /health`
 - `GET /status`
 - `GET /skills`
+- `GET /memory/messages`
+- `GET /tasks`
+- `POST /tasks`
 - `POST /orchestrator/run`
 
 Example:
@@ -72,6 +75,17 @@ curl -sS http://localhost:3000/orchestrator/run \
 ## Telegram mode
 
 If `TELEGRAM_BOT_TOKEN` is configured, LiNa starts polling automatically and handles text messages from allowed user IDs.
+
+## Supabase mode
+
+If `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured, LiNa switches persistence from local filesystem fallback to Supabase automatically.
+
+The current integration already supports:
+
+- message persistence
+- task persistence
+- system logs
+- persistence health reporting in `/health` and `/status`
 
 ## Current gaps
 
