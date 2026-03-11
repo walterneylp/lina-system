@@ -1657,11 +1657,11 @@ const html = `<!DOCTYPE html>
         setElementDisabled("#task-title", !canManageTasks);
         setElementDisabled("#task-agent", !canManageTasks);
         setElementDisabled("#task-status", !canManageTasks);
-        setElementDisabled("#task-form button[type=\"submit\"]", !canManageTasks);
+        setElementDisabled('#task-form button[type="submit"]', !canManageTasks);
 
         setElementDisabled("#composer-text", !canRunComposer);
         setElementDisabled("#composer-task", !canRunComposer);
-        setElementDisabled("#composer-form button[type=\"submit\"]", !canRunComposer);
+        setElementDisabled('#composer-form button[type="submit"]', !canRunComposer);
 
         if (dashboardState.activeView === "composer" && !canRunComposer) {
           dashboardState.activeView = "overview";
