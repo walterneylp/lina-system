@@ -17,6 +17,8 @@ type SupabaseMemoryStoreOptions = {
   serviceRoleKey: string;
 };
 
+type SupabaseMessageRecord = Record<string, string | null | undefined>;
+
 export class SupabaseMemoryStore implements MemoryStore {
   private readonly client: SupabaseClient;
   private messageMetadataSupport?: boolean;
@@ -121,8 +123,8 @@ export class SupabaseMemoryStore implements MemoryStore {
       throw new Error(`Failed to list messages: ${error.message}`);
     }
 
-    return ((data || []) as Array<Record<string, string | null | undefined>>).map(
-      (item: Record<string, string | null | undefined>) =>
+    return (((data || []) as unknown) as SupabaseMessageRecord[]).map(
+      (item: SupabaseMessageRecord) =>
         this.mapMessageRecord(item, supportsMetadata)
     );
   }
@@ -342,26 +344,29 @@ export class SupabaseMemoryStore implements MemoryStore {
   }
 
   private mapMessageRecord(
-    item: Record<string, string | null | undefined>,
+    item: SupabaseMessageRecord,
     includeMetadata: boolean
   ): ConversationMessage {
+    const getOptional = (value: string | null | undefined): string | undefined =>
+      value === null || value === undefined || value === "" ? undefined : value;
+
     return {
-      id: item.id,
-      conversationId: item.conversation_id,
+      id: getOptional(item.id),
+      conversationId: getOptional(item.conversation_id),
       role: item.role as MemoryRole,
-      content: item.content,
-      createdAt: item.created_at,
+      content: item.content || "",
+      createdAt: item.created_at || new Date().toISOString(),
       metadata: includeMetadata
         ? {
             source: item.source as ConversationMessageMetadata["source"],
-            channel: item.channel,
-            chatId: item.chat_id,
-            chatType: item.chat_type,
-            userId: item.user_id,
-            username: item.username,
-            firstName: item.first_name,
+            channel: getOptional(item.channel),
+            chatId: getOptional(item.chat_id),
+            chatType: getOptional(item.chat_type),
+            userId: getOptional(item.user_id),
+            username: getOptional(item.username),
+            firstName: getOptional(item.first_name),
             messageType: item.message_type as ConversationMessageMetadata["messageType"],
-            transportMessageId: item.transport_message_id,
+            transportMessageId: getOptional(item.transport_message_id),
           }
         : undefined,
     };

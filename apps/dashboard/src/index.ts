@@ -271,7 +271,7 @@ const html = `<!DOCTYPE html>
 
       .hero-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 12px;
         margin-top: 22px;
       }
@@ -294,6 +294,12 @@ const html = `<!DOCTYPE html>
         margin-top: 10px;
         font-size: 1.8rem;
         font-weight: 700;
+      }
+
+      .metric-note {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 0.78rem;
       }
 
       .hero-side {
@@ -543,6 +549,12 @@ const html = `<!DOCTYPE html>
         word-break: break-word;
       }
 
+      .feed-submeta {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
       .provider-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -578,6 +590,10 @@ const html = `<!DOCTYPE html>
         .hero,
         .content-grid {
           grid-template-columns: 1fr;
+        }
+
+        .hero-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
 
@@ -627,18 +643,42 @@ const html = `<!DOCTYPE html>
             <div class="metric">
               <div class="metric-label">Status Geral</div>
               <div class="metric-value" id="metric-health">...</div>
+              <div class="metric-note" id="metric-persistence">Persistência n/a</div>
             </div>
             <div class="metric">
               <div class="metric-label">Mensagens</div>
               <div class="metric-value" id="metric-messages">0</div>
+              <div class="metric-note" id="metric-telegram-messages">Telegram 0</div>
             </div>
             <div class="metric">
               <div class="metric-label">Tarefas</div>
               <div class="metric-value" id="metric-tasks">0</div>
+              <div class="metric-note" id="metric-pending-tasks">Pendentes 0</div>
             </div>
             <div class="metric">
               <div class="metric-label">Providers Ativos</div>
               <div class="metric-value" id="metric-providers">0</div>
+              <div class="metric-note" id="metric-default-provider">Default n/a</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Chats Telegram</div>
+              <div class="metric-value" id="metric-telegram-chats">0</div>
+              <div class="metric-note" id="metric-telegram-users">Usuários 0</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Execuções</div>
+              <div class="metric-value" id="metric-executions">0</div>
+              <div class="metric-note" id="metric-execution-success">Sucesso n/a</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Falhas</div>
+              <div class="metric-value" id="metric-failures">0</div>
+              <div class="metric-note" id="metric-running-tasks">Running 0</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Atividade</div>
+              <div class="metric-value" id="metric-last-activity">n/a</div>
+              <div class="metric-note" id="metric-last-source">Sem origem recente</div>
             </div>
           </div>
         </article>
@@ -797,6 +837,23 @@ const html = `<!DOCTYPE html>
             <h2>Execuções</h2>
             <p>Histórico recente do orquestrador com status, provider e resumo.</p>
           </div>
+          <div class="section-tools">
+            <label>
+              Status
+              <select id="execution-filter-status" class="control">
+                <option value="">Todos</option>
+                <option value="completed">completed</option>
+                <option value="failed">failed</option>
+                <option value="running">running</option>
+              </select>
+            </label>
+            <label>
+              Provider
+              <select id="execution-filter-provider" class="control">
+                <option value="">Todos</option>
+              </select>
+            </label>
+          </div>
           <div class="feed" id="executions-feed"></div>
         </article>
       </section>
@@ -931,6 +988,50 @@ const html = `<!DOCTYPE html>
         level: document.getElementById("log-filter-level").value.trim(),
       });
 
+      const getExecutionFilters = () => ({
+        status: document.getElementById("execution-filter-status").value.trim(),
+        provider: document.getElementById("execution-filter-provider").value.trim(),
+      });
+
+      const computeOperationalSummary = (messages, tasks, executions, providers, status, health) => {
+        const telegramMessages = (messages || []).filter((message) => message.metadata?.source === "telegram");
+        const uniqueChats = new Set(
+          telegramMessages.map((message) => message.metadata?.chatId).filter(Boolean)
+        );
+        const uniqueUsers = new Set(
+          telegramMessages.map((message) => message.metadata?.userId).filter(Boolean)
+        );
+        const pendingTasks = (tasks || []).filter((task) => task.status === "pending").length;
+        const runningTasks = (tasks || []).filter((task) => task.status === "running").length;
+        const failedExecutions = (executions || []).filter((execution) => execution.status === "failed").length;
+        const completedExecutions = (executions || []).filter((execution) => execution.status === "completed").length;
+        const activeProviders = Object.values(providers || {}).filter((item) => item?.configured).length;
+        const lastMessage = [...(messages || [])]
+          .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")))[0];
+        const executionSuccessRate = executions?.length
+          ? Math.round((completedExecutions / executions.length) * 100)
+          : null;
+
+        return {
+          telegramMessages: telegramMessages.length,
+          uniqueChats: uniqueChats.size,
+          uniqueUsers: uniqueUsers.size,
+          pendingTasks,
+          runningTasks,
+          failedExecutions,
+          completedExecutions,
+          activeProviders,
+          defaultProvider: status?.defaultProvider || health?.defaultProvider || "n/a",
+          persistenceProvider: status?.persistence?.provider || health?.persistence?.provider || "n/a",
+          lastActivityAt: lastMessage?.createdAt || null,
+          lastActivitySource:
+            lastMessage?.metadata?.source ||
+            lastMessage?.role ||
+            "sem origem recente",
+          executionSuccessRate,
+        };
+      };
+
       const renderTasks = (tasks) => {
         const feed = document.getElementById("tasks-feed");
         const filters = getTaskFilters();
@@ -1000,6 +1101,11 @@ const html = `<!DOCTYPE html>
               <span>\${formatTime(message.createdAt)}</span>
             </div>
             <div class="feed-body">\${escapeHtml(message.content)}</div>
+            <div class="feed-submeta">
+              \${escapeHtml(message.metadata?.source || "origem n/a")} ·
+              \${escapeHtml(message.metadata?.messageType || "tipo n/a")} ·
+              \${escapeHtml(message.metadata?.firstName || message.metadata?.username || message.metadata?.chatId || "sem remetente")}
+            </div>
           </article>
         \`).join("");
       };
@@ -1082,13 +1188,20 @@ const html = `<!DOCTYPE html>
 
       const renderExecutions = (executions) => {
         const feed = document.getElementById("executions-feed");
+        const filters = getExecutionFilters();
 
-        if (!executions?.length) {
+        const filteredExecutions = (executions || []).filter((execution) => {
+          const statusMatch = !filters.status || execution.status === filters.status;
+          const providerMatch = !filters.provider || execution.provider === filters.provider;
+          return statusMatch && providerMatch;
+        });
+
+        if (!filteredExecutions.length) {
           renderEmpty(feed, "Nenhuma execução registrada.");
           return;
         }
 
-        feed.innerHTML = executions.map((execution) => \`
+        feed.innerHTML = filteredExecutions.map((execution) => \`
           <article class="feed-item">
             <div class="feed-meta">
               <span class="badge \${badgeClass(execution.status === "completed" ? "ok" : execution.status === "failed" ? "degraded" : "configured")}">\${escapeHtml(execution.status)}</span>
@@ -1100,12 +1213,38 @@ const html = `<!DOCTYPE html>
         \`).join("");
       };
 
-      const updateMetrics = (health, providers, messages, tasks) => {
+      const renderExecutionOptions = (executions) => {
+        const select = document.getElementById("execution-filter-provider");
+        const currentValue = select.value;
+        const providers = Array.from(
+          new Set((executions || []).map((execution) => execution.provider).filter(Boolean))
+        ).sort((left, right) => String(left).localeCompare(String(right)));
+
+        select.innerHTML = ['<option value="">Todos</option>']
+          .concat(providers.map((provider) => \`<option value="\${escapeHtml(provider)}">\${escapeHtml(provider)}</option>\`))
+          .join("");
+        select.value = currentValue;
+      };
+
+      const updateMetrics = (health, status, providers, messages, tasks, executions) => {
+        const summary = computeOperationalSummary(messages, tasks, executions, providers, status, health);
         document.getElementById("metric-health").textContent = safeText(health?.status || "n/a");
         document.getElementById("metric-messages").textContent = safeText(messages?.length || 0);
         document.getElementById("metric-tasks").textContent = safeText(tasks?.length || 0);
-        const activeProviders = Object.values(providers || {}).filter((item) => item?.configured).length;
-        document.getElementById("metric-providers").textContent = safeText(activeProviders);
+        document.getElementById("metric-providers").textContent = safeText(summary.activeProviders);
+        document.getElementById("metric-persistence").textContent = "Persistência " + safeText(summary.persistenceProvider);
+        document.getElementById("metric-telegram-messages").textContent = "Telegram " + safeText(summary.telegramMessages);
+        document.getElementById("metric-pending-tasks").textContent = "Pendentes " + safeText(summary.pendingTasks);
+        document.getElementById("metric-default-provider").textContent = "Default " + safeText(summary.defaultProvider);
+        document.getElementById("metric-telegram-chats").textContent = safeText(summary.uniqueChats);
+        document.getElementById("metric-telegram-users").textContent = "Usuários " + safeText(summary.uniqueUsers);
+        document.getElementById("metric-executions").textContent = safeText(executions?.length || 0);
+        document.getElementById("metric-execution-success").textContent =
+          summary.executionSuccessRate === null ? "Sucesso n/a" : "Sucesso " + safeText(summary.executionSuccessRate) + "%";
+        document.getElementById("metric-failures").textContent = safeText(summary.failedExecutions);
+        document.getElementById("metric-running-tasks").textContent = "Running " + safeText(summary.runningTasks);
+        document.getElementById("metric-last-activity").textContent = summary.lastActivityAt ? formatTime(summary.lastActivityAt) : "n/a";
+        document.getElementById("metric-last-source").textContent = safeText(summary.lastActivitySource);
       };
 
       const fetchJson = async (url) => {
@@ -1161,8 +1300,9 @@ const html = `<!DOCTYPE html>
           renderStatus(health, status);
           renderProviders(providers);
           renderTaskOptions(tasks);
+          renderExecutionOptions(executions);
           rerenderFeeds();
-          updateMetrics(health, providers, messages, tasks);
+          updateMetrics(health, status, providers, messages, tasks, executions);
           document.getElementById("last-updated").textContent = "Atualizado em " + new Date().toLocaleString("pt-BR");
         } catch (error) {
           document.getElementById("last-updated").textContent = error instanceof Error ? error.message : "Falha ao atualizar";
@@ -1267,6 +1407,8 @@ const html = `<!DOCTYPE html>
         "message-filter-role",
         "log-filter",
         "log-filter-level",
+        "execution-filter-status",
+        "execution-filter-provider",
       ].forEach((id) => {
         document.getElementById(id).addEventListener("input", rerenderFeeds);
         document.getElementById(id).addEventListener("change", rerenderFeeds);
