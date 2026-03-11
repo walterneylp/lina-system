@@ -4,6 +4,7 @@ import {
   ConversationMessage,
   LinaSystemLogRecord,
   LinaTaskRecord,
+  LinaTaskUpdate,
   MemoryRole,
   PersistenceHealth,
 } from "./memory.types";
@@ -152,6 +153,41 @@ export class SupabaseMemoryStore implements MemoryStore {
       assignedAgent: item.assigned_agent,
       createdAt: item.created_at,
     }));
+  }
+
+  public async updateTask(id: string, updates: LinaTaskUpdate): Promise<LinaTaskRecord> {
+    const payload: Record<string, string | null> = {};
+
+    if (updates.title !== undefined) {
+      payload.title = updates.title;
+    }
+
+    if (updates.status !== undefined) {
+      payload.status = updates.status;
+    }
+
+    if (updates.assignedAgent !== undefined) {
+      payload.assigned_agent = updates.assignedAgent;
+    }
+
+    const { data, error } = await this.client
+      .from("tasks")
+      .update(payload)
+      .eq("id", id)
+      .select("id, title, status, assigned_agent, created_at")
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to update task: ${error?.message || "unknown error"}`);
+    }
+
+    return {
+      id: data.id,
+      title: data.title,
+      status: data.status,
+      assignedAgent: data.assigned_agent,
+      createdAt: data.created_at,
+    };
   }
 
   public async listLogs(limit = 50): Promise<LinaSystemLogRecord[]> {

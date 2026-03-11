@@ -3,6 +3,7 @@ import {
   ConversationMessage,
   LinaSystemLogRecord,
   LinaTaskRecord,
+  LinaTaskUpdate,
   MemoryRole,
   PersistenceHealth,
 } from "./memory.types";
@@ -41,6 +42,10 @@ export class MemoryManager {
 
   public async listTasks(): Promise<LinaTaskRecord[]> {
     return this.store.listTasks();
+  }
+
+  public async updateTask(id: string, updates: LinaTaskUpdate): Promise<LinaTaskRecord> {
+    return this.store.updateTask(id, updates);
   }
 
   public async listLogs(limit?: number): Promise<LinaSystemLogRecord[]> {

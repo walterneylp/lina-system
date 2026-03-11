@@ -242,6 +242,7 @@ const html = `<!DOCTYPE html>
         align-items: center;
         justify-content: space-between;
         margin-bottom: 18px;
+        flex-wrap: wrap;
       }
 
       .toolbar button {
@@ -255,8 +256,89 @@ const html = `<!DOCTYPE html>
         cursor: pointer;
       }
 
+      .toolbar-group {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
       .toolbar small {
         color: var(--muted);
+      }
+
+      .control,
+      .task-form input,
+      .task-form select {
+        min-height: 44px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.04);
+        color: var(--text);
+        padding: 10px 14px;
+      }
+
+      .control::placeholder,
+      .task-form input::placeholder {
+        color: var(--muted);
+      }
+
+      .toolbar label,
+      .task-form label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .task-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto auto;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .task-form button,
+      .task-action {
+        appearance: none;
+        border: 0;
+        cursor: pointer;
+        min-height: 44px;
+        border-radius: 14px;
+        padding: 10px 14px;
+        font-weight: 700;
+      }
+
+      .task-form button {
+        background: rgba(84, 210, 167, 0.16);
+        color: var(--good);
+      }
+
+      .task-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+      }
+
+      .task-action {
+        background: rgba(255,255,255,0.05);
+        color: var(--text);
+      }
+
+      .task-action[data-status="running"] { color: var(--warn); }
+      .task-action[data-status="completed"] { color: var(--good); }
+      .task-action[data-status="failed"] { color: var(--bad); }
+
+      .section-tools {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+      }
+
+      .section-tools .control {
+        min-width: 170px;
       }
 
       .content-grid {
@@ -377,6 +459,10 @@ const html = `<!DOCTYPE html>
           flex-direction: column;
           align-items: stretch;
         }
+
+        .task-form {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -419,7 +505,17 @@ const html = `<!DOCTYPE html>
       </section>
 
       <div class="toolbar">
-        <button id="refresh-button" type="button">Atualizar Agora</button>
+        <div class="toolbar-group">
+          <button id="refresh-button" type="button">Atualizar Agora</button>
+          <label>
+            Filtrar mensagens
+            <input id="message-filter" class="control" type="text" placeholder="role, conteúdo, data..." />
+          </label>
+          <label>
+            Filtrar logs
+            <input id="log-filter" class="control" type="text" placeholder="level, mensagem..." />
+          </label>
+        </div>
         <small id="last-updated">Aguardando primeira carga...</small>
       </div>
 
@@ -437,6 +533,42 @@ const html = `<!DOCTYPE html>
             <h2>Tarefas</h2>
             <p>Tarefas persistidas pela LiNa.</p>
           </div>
+          <form class="task-form" id="task-form">
+            <label>
+              Nova tarefa
+              <input id="task-title" type="text" placeholder="Ex: validar skill router" required />
+            </label>
+            <label>
+              Responsável
+              <input id="task-agent" type="text" placeholder="Ex: orchestrator" />
+            </label>
+            <label>
+              Status
+              <select id="task-status">
+                <option value="pending">pending</option>
+                <option value="running">running</option>
+                <option value="completed">completed</option>
+                <option value="failed">failed</option>
+              </select>
+            </label>
+            <button type="submit">Criar</button>
+          </form>
+          <div class="section-tools">
+            <label>
+              Status
+              <select id="task-filter-status" class="control">
+                <option value="">Todos</option>
+                <option value="pending">pending</option>
+                <option value="running">running</option>
+                <option value="completed">completed</option>
+                <option value="failed">failed</option>
+              </select>
+            </label>
+            <label>
+              Texto
+              <input id="task-filter-query" class="control" type="text" placeholder="Título ou agente..." />
+            </label>
+          </div>
           <div class="feed" id="tasks-feed"></div>
         </article>
 
@@ -445,6 +577,18 @@ const html = `<!DOCTYPE html>
             <h2>Mensagens Recentes</h2>
             <p>Histórico operacional da conversa persistida.</p>
           </div>
+          <div class="section-tools">
+            <label>
+              Role
+              <select id="message-filter-role" class="control">
+                <option value="">Todos</option>
+                <option value="system">system</option>
+                <option value="user">user</option>
+                <option value="assistant">assistant</option>
+                <option value="tool">tool</option>
+              </select>
+            </label>
+          </div>
           <div class="feed" id="messages-feed"></div>
         </article>
 
@@ -452,6 +596,16 @@ const html = `<!DOCTYPE html>
           <div class="section-head">
             <h2>Logs do Sistema</h2>
             <p>Eventos recentes do runtime para depuração e monitoramento.</p>
+          </div>
+          <div class="section-tools">
+            <label>
+              Level
+              <select id="log-filter-level" class="control">
+                <option value="">Todos</option>
+                <option value="info">info</option>
+                <option value="error">error</option>
+              </select>
+            </label>
           </div>
           <div class="feed" id="logs-feed"></div>
         </article>
@@ -466,6 +620,15 @@ const html = `<!DOCTYPE html>
         messages: "/api/memory/messages",
         tasks: "/api/tasks",
         logs: "/api/logs?limit=30",
+      };
+
+      const dashboardState = {
+        health: null,
+        status: null,
+        providers: {},
+        messages: [],
+        tasks: [],
+        logs: [],
       };
 
       const badgeClass = (value) => {
@@ -553,14 +716,39 @@ const html = `<!DOCTYPE html>
         }).join("");
       };
 
+      const getTaskFilters = () => ({
+        status: document.getElementById("task-filter-status").value.trim(),
+        query: document.getElementById("task-filter-query").value.trim().toLowerCase(),
+      });
+
+      const getMessageFilters = () => ({
+        query: document.getElementById("message-filter").value.trim().toLowerCase(),
+        role: document.getElementById("message-filter-role").value.trim(),
+      });
+
+      const getLogFilters = () => ({
+        query: document.getElementById("log-filter").value.trim().toLowerCase(),
+        level: document.getElementById("log-filter-level").value.trim(),
+      });
+
       const renderTasks = (tasks) => {
         const feed = document.getElementById("tasks-feed");
-        if (!tasks?.length) {
+        const filters = getTaskFilters();
+        const filteredTasks = (tasks || []).filter((task) => {
+          const statusMatch = !filters.status || task.status === filters.status;
+          const queryMatch =
+            !filters.query ||
+            safeText(task.title).toLowerCase().includes(filters.query) ||
+            safeText(task.assignedAgent).toLowerCase().includes(filters.query);
+          return statusMatch && queryMatch;
+        });
+
+        if (!filteredTasks.length) {
           renderEmpty(feed, "Nenhuma tarefa registrada.");
           return;
         }
 
-        feed.innerHTML = tasks.slice(0, 12).map((task) => \`
+        feed.innerHTML = filteredTasks.slice(0, 12).map((task) => \`
           <article class="feed-item">
             <div class="feed-meta">
               <span class="badge \${badgeClass(task.status === "completed" ? "ok" : task.status === "failed" ? "degraded" : "configured")}">\${safeText(task.status)}</span>
@@ -568,18 +756,34 @@ const html = `<!DOCTYPE html>
             </div>
             <div class="feed-title">\${safeText(task.title)}</div>
             <div class="feed-body">Agente: \${safeText(task.assignedAgent)}</div>
+            <div class="task-actions">
+              <button class="task-action" data-task-id="\${task.id}" data-status="pending" type="button">pending</button>
+              <button class="task-action" data-task-id="\${task.id}" data-status="running" type="button">running</button>
+              <button class="task-action" data-task-id="\${task.id}" data-status="completed" type="button">completed</button>
+              <button class="task-action" data-task-id="\${task.id}" data-status="failed" type="button">failed</button>
+            </div>
           </article>
         \`).join("");
       };
 
       const renderMessages = (messages) => {
         const feed = document.getElementById("messages-feed");
-        if (!messages?.length) {
+        const filters = getMessageFilters();
+        const filteredMessages = (messages || []).filter((message) => {
+          const roleMatch = !filters.role || message.role === filters.role;
+          const queryMatch =
+            !filters.query ||
+            safeText(message.content).toLowerCase().includes(filters.query) ||
+            safeText(message.role).toLowerCase().includes(filters.query);
+          return roleMatch && queryMatch;
+        });
+
+        if (!filteredMessages.length) {
           renderEmpty(feed, "Nenhuma mensagem persistida.");
           return;
         }
 
-        feed.innerHTML = messages.slice(-12).reverse().map((message) => \`
+        feed.innerHTML = filteredMessages.slice(-12).reverse().map((message) => \`
           <article class="feed-item">
             <div class="feed-meta">
               <span class="badge neutral">\${safeText(message.role)}</span>
@@ -592,12 +796,22 @@ const html = `<!DOCTYPE html>
 
       const renderLogs = (logs) => {
         const feed = document.getElementById("logs-feed");
-        if (!logs?.length) {
+        const filters = getLogFilters();
+        const filteredLogs = (logs || []).filter((log) => {
+          const levelMatch = !filters.level || log.level === filters.level;
+          const queryMatch =
+            !filters.query ||
+            safeText(log.message).toLowerCase().includes(filters.query) ||
+            safeText(log.level).toLowerCase().includes(filters.query);
+          return levelMatch && queryMatch;
+        });
+
+        if (!filteredLogs.length) {
           renderEmpty(feed, "Nenhum log recente.");
           return;
         }
 
-        feed.innerHTML = logs.map((log) => \`
+        feed.innerHTML = filteredLogs.map((log) => \`
           <article class="feed-item">
             <div class="feed-meta">
               <span class="badge \${badgeClass(log.level === "error" ? "degraded" : log.level === "info" ? "ok" : "configured")}">\${safeText(log.level)}</span>
@@ -624,6 +838,26 @@ const html = `<!DOCTYPE html>
         return response.json();
       };
 
+      const sendJson = async (url, method, payload) => {
+        const response = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error("Falha na operação " + method + " " + url + ": " + response.status);
+        }
+
+        return response.json();
+      };
+
+      const rerenderFeeds = () => {
+        renderTasks(dashboardState.tasks);
+        renderMessages(dashboardState.messages);
+        renderLogs(dashboardState.logs);
+      };
+
       const refresh = async () => {
         try {
           const [health, status, providers, messages, tasks, logs] = await Promise.all([
@@ -635,11 +869,16 @@ const html = `<!DOCTYPE html>
             fetchJson(endpoints.logs),
           ]);
 
+          dashboardState.health = health;
+          dashboardState.status = status;
+          dashboardState.providers = providers;
+          dashboardState.messages = messages;
+          dashboardState.tasks = tasks;
+          dashboardState.logs = logs;
+
           renderStatus(health, status);
           renderProviders(providers);
-          renderTasks(tasks);
-          renderMessages(messages);
-          renderLogs(logs);
+          rerenderFeeds();
           updateMetrics(health, providers, messages, tasks);
           document.getElementById("last-updated").textContent = "Atualizado em " + new Date().toLocaleString("pt-BR");
         } catch (error) {
@@ -648,6 +887,68 @@ const html = `<!DOCTYPE html>
       };
 
       document.getElementById("refresh-button").addEventListener("click", refresh);
+      document.getElementById("task-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const titleInput = document.getElementById("task-title");
+        const agentInput = document.getElementById("task-agent");
+        const statusInput = document.getElementById("task-status");
+        const title = titleInput.value.trim();
+
+        if (!title) {
+          return;
+        }
+
+        try {
+          await sendJson(endpoints.tasks, "POST", {
+            title,
+            assignedAgent: agentInput.value.trim() || null,
+            status: statusInput.value,
+          });
+
+          titleInput.value = "";
+          agentInput.value = "";
+          statusInput.value = "pending";
+          await refresh();
+        } catch (error) {
+          document.getElementById("last-updated").textContent = error instanceof Error ? error.message : "Falha ao criar tarefa";
+        }
+      });
+
+      document.getElementById("tasks-feed").addEventListener("click", async (event) => {
+        const button = event.target.closest(".task-action");
+
+        if (!button) {
+          return;
+        }
+
+        const taskId = button.dataset.taskId;
+        const status = button.dataset.status;
+
+        if (!taskId || !status) {
+          return;
+        }
+
+        try {
+          await sendJson(\`/api/tasks/\${taskId}\`, "PATCH", { status });
+          await refresh();
+        } catch (error) {
+          document.getElementById("last-updated").textContent = error instanceof Error ? error.message : "Falha ao atualizar tarefa";
+        }
+      });
+
+      [
+        "task-filter-status",
+        "task-filter-query",
+        "message-filter",
+        "message-filter-role",
+        "log-filter",
+        "log-filter-level",
+      ].forEach((id) => {
+        document.getElementById(id).addEventListener("input", rerenderFeeds);
+        document.getElementById(id).addEventListener("change", rerenderFeeds);
+      });
+
       refresh();
       setInterval(refresh, 15000);
     </script>

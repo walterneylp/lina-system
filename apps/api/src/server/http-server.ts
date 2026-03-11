@@ -168,6 +168,34 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
         return;
       }
 
+      if (method === "PATCH" && url.startsWith("/tasks/")) {
+        const taskId = url.split("/")[2];
+
+        if (!taskId) {
+          response.writeHead(400, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ error: "Missing task id." }));
+          return;
+        }
+
+        const rawBody = await readBody(request);
+        const payload = JSON.parse(rawBody || "{}") as {
+          title?: string;
+          status?: string;
+          assignedAgent?: string | null;
+        };
+
+        const task = await dependencies.memoryManager.updateTask(taskId, {
+          title: payload.title,
+          status: payload.status,
+          assignedAgent: payload.assignedAgent,
+        });
+        await dependencies.memoryManager.log("info", `Task updated: ${task.title} (${task.status})`);
+
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(task));
+        return;
+      }
+
       response.writeHead(404, { "Content-Type": "application/json" });
       response.end(JSON.stringify({ error: "Not found" }));
     } catch (error) {

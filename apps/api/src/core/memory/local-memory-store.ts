@@ -6,6 +6,7 @@ import {
   ConversationMessage,
   LinaSystemLogRecord,
   LinaTaskRecord,
+  LinaTaskUpdate,
   MemoryRole,
   PersistenceHealth,
 } from "./memory.types";
@@ -78,6 +79,28 @@ export class LocalMemoryStore implements MemoryStore {
 
   public async listTasks(): Promise<LinaTaskRecord[]> {
     return this.load().tasks;
+  }
+
+  public async updateTask(id: string, updates: LinaTaskUpdate): Promise<LinaTaskRecord> {
+    const state = this.load();
+    const taskIndex = state.tasks.findIndex((task) => task.id === id);
+
+    if (taskIndex < 0) {
+      throw new Error(`Task not found: ${id}`);
+    }
+
+    const currentTask = state.tasks[taskIndex];
+    const updatedTask: LinaTaskRecord = {
+      ...currentTask,
+      title: updates.title ?? currentTask.title,
+      status: updates.status ?? currentTask.status,
+      assignedAgent:
+        updates.assignedAgent === undefined ? currentTask.assignedAgent || null : updates.assignedAgent,
+    };
+
+    state.tasks[taskIndex] = updatedTask;
+    this.persist(state);
+    return updatedTask;
   }
 
   public async listLogs(limit = 50): Promise<LinaSystemLogRecord[]> {

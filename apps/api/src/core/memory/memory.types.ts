@@ -23,6 +23,12 @@ export type LinaTaskRecord = {
   createdAt?: string;
 };
 
+export type LinaTaskUpdate = {
+  title?: string;
+  status?: string;
+  assignedAgent?: string | null;
+};
+
 export type LinaSystemLogRecord = {
   id?: string;
   level: string;
