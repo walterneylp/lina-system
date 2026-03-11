@@ -1,6 +1,7 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { DashboardAuthState, DashboardAuthStore } from "./auth/dashboard-auth-store";
 
 const parseDotEnv = (): Record<string, string> => {
   if (!existsSync(".env")) {
@@ -25,14 +26,30 @@ const parseDotEnv = (): Record<string, string> => {
 };
 
 const fileEnv = parseDotEnv();
-const readEnv = (key: string, fallback: string): string => process.env[key] || fileEnv[key] || fallback;
+const readEnv = (key: string, fallback: string): string =>
+  process.env[key] ?? fileEnv[key] ?? fallback;
 
 const dashboardPort = Number.parseInt(readEnv("DASHBOARD_PORT", "3001"), 10);
 const apiBaseUrl = readEnv("DASHBOARD_API_BASE", `http://localhost:${readEnv("APP_PORT", "3012")}`);
 const dashboardAccessToken = readEnv("DASHBOARD_ACCESS_TOKEN", "");
+const dashboardSupabaseUrl = readEnv("SUPABASE_URL", "");
+const dashboardSupabaseServiceRoleKey = readEnv("SUPABASE_SERVICE_ROLE_KEY", "");
 const dashboardSessionValue = dashboardAccessToken
   ? createHash("sha256").update(dashboardAccessToken).digest("hex")
   : "";
+const dashboardSessionCookieName = "lina_dashboard_session";
+const dashboardAuthStore =
+  dashboardSupabaseUrl && dashboardSupabaseServiceRoleKey
+    ? new DashboardAuthStore({
+        url: dashboardSupabaseUrl,
+        serviceRoleKey: dashboardSupabaseServiceRoleKey,
+      })
+    : null;
+const dashboardAuthMode = dashboardAuthStore
+  ? "database"
+  : dashboardAccessToken
+    ? "token"
+    : "open";
 
 const sendJson = (response: ServerResponse, status: number, payload: unknown) => {
   response.writeHead(status, { "Content-Type": "application/json" });
@@ -66,16 +83,33 @@ const parseCookies = (cookieHeader?: string): Record<string, string> =>
       return accumulator;
     }, {});
 
-const isAuthenticated = (request: IncomingMessage): boolean => {
-  if (!dashboardAccessToken) {
-    return true;
+const buildSessionCookie = (value: string, maxAgeSeconds?: number): string => {
+  const parts = [
+    `${dashboardSessionCookieName}=${encodeURIComponent(value)}`,
+    "HttpOnly",
+    "SameSite=Lax",
+    "Path=/",
+  ];
+
+  if (maxAgeSeconds !== undefined) {
+    parts.push(`Max-Age=${maxAgeSeconds}`);
   }
 
-  const cookies = parseCookies(request.headers.cookie);
-  return cookies.lina_dashboard_session === dashboardSessionValue;
+  return parts.join("; ");
 };
 
-const loginHtml = (errorMessage?: string) => `<!DOCTYPE html>
+const clearSessionCookie = (): string => buildSessionCookie("", 0);
+
+const isTokenAuthenticated = (request: IncomingMessage): boolean => {
+  const cookies = parseCookies(request.headers.cookie);
+  return cookies[dashboardSessionCookieName] === dashboardSessionValue;
+};
+
+const loginHtml = (options?: {
+  errorMessage?: string;
+  authState?: DashboardAuthState | null;
+  infoMessage?: string;
+}): string => `<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -103,8 +137,13 @@ const loginHtml = (errorMessage?: string) => `<!DOCTYPE html>
         color: var(--text);
         font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
       }
+      .layout {
+        width: min(980px, calc(100% - 24px));
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 18px;
+      }
       .card {
-        width: min(460px, calc(100% - 24px));
         padding: 28px;
         border-radius: 24px;
         background: var(--panel);
@@ -137,20 +176,150 @@ const loginHtml = (errorMessage?: string) => `<!DOCTYPE html>
         color: var(--bad);
         font-size: 0.92rem;
       }
+      .muted {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0 12px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.06);
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+      .success {
+        color: #9fe2c5;
+      }
+      @media (max-width: 860px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
     </style>
   </head>
   <body>
-    <section class="card">
-      <h1>LiNa Dashboard</h1>
-      <p>Este painel controla tarefas, execuções, logs e o composer do orquestrador. Autentique-se para continuar.</p>
-      <form method="POST" action="/login">
-        <input type="password" name="token" placeholder="Access token" required />
-        <button type="submit">Entrar</button>
-      </form>
-      ${errorMessage ? `<div class="error">${errorMessage}</div>` : ""}
-    </section>
+    <main class="layout">
+      <section class="card">
+        <h1>LiNa Dashboard</h1>
+        <p>Autenticação do painel operacional. O acesso agora é persistido no banco, com senha protegida por hash e sessão dedicada.</p>
+        ${
+          dashboardAuthMode === "database"
+            ? `
+              <div class="badge">Usuários cadastrados: ${String(options?.authState?.usersCount || 0)}</div>
+              <form method="POST" action="/login">
+                <input type="text" name="username" placeholder="Usuário" autocomplete="username" required />
+                <input type="password" name="password" placeholder="Senha" autocomplete="current-password" required />
+                <button type="submit">Entrar</button>
+              </form>
+              <p class="muted">O acesso inicial de administrador ${
+                options?.authState?.allowAdminBootstrap ? '<span class="success">está habilitado</span>' : "está desabilitado"
+              }.</p>
+            `
+            : `
+              <form method="POST" action="/login">
+                <input type="password" name="token" placeholder="Access token" required />
+                <button type="submit">Entrar</button>
+              </form>
+            `
+        }
+        ${options?.errorMessage ? `<div class="error">${options.errorMessage}</div>` : ""}
+      </section>
+      <section class="card">
+        <h1>Bootstrap Admin</h1>
+        <p>Cadastre o primeiro administrador diretamente desta tela. Depois, você poderá reativar ou desativar esse fluxo na área de configurações do dashboard.</p>
+        ${
+          dashboardAuthMode === "database" && options?.authState?.allowAdminBootstrap
+            ? `
+              <form method="POST" action="/bootstrap-admin">
+                <input type="text" name="username" placeholder="Usuário admin" autocomplete="username" required />
+                <input type="password" name="password" placeholder="Senha" autocomplete="new-password" required />
+                <input type="password" name="confirmPassword" placeholder="Confirmar senha" autocomplete="new-password" required />
+                <button type="submit">Cadastrar primeiro admin</button>
+              </form>
+            `
+            : `
+              <p class="muted">O cadastro inicial está indisponível agora. Se já houver um admin ativo, reative esse fluxo na seção <strong>Configurações</strong> do dashboard.</p>
+            `
+        }
+        ${options?.infoMessage ? `<div class="muted">${options.infoMessage}</div>` : ""}
+      </section>
+    </main>
   </body>
 </html>`;
+
+type DashboardRequestAuthContext = {
+  mode: "database" | "token" | "open";
+  isAuthenticated: boolean;
+  currentUser: {
+    id: string;
+    username: string;
+    role: string;
+  } | null;
+  authState: DashboardAuthState | null;
+  authError?: string | null;
+};
+
+const getRequestAuthContext = async (
+  request: IncomingMessage
+): Promise<DashboardRequestAuthContext> => {
+  if (dashboardAuthMode === "open") {
+    return {
+      mode: "open",
+      isAuthenticated: true,
+      currentUser: null,
+      authState: null,
+    };
+  }
+
+  if (dashboardAuthMode === "token") {
+    return {
+      mode: "token",
+      isAuthenticated: isTokenAuthenticated(request),
+      currentUser: isTokenAuthenticated(request)
+        ? {
+            id: "legacy-token",
+            username: "legacy-admin",
+            role: "admin",
+          }
+        : null,
+      authState: null,
+    };
+  }
+
+  try {
+    const authState = await dashboardAuthStore!.getAuthState();
+    const token = parseCookies(request.headers.cookie)[dashboardSessionCookieName];
+    const currentUser = await dashboardAuthStore!.getUserFromSession(token);
+
+    return {
+      mode: "database",
+      isAuthenticated: Boolean(currentUser),
+      currentUser: currentUser
+        ? {
+            id: currentUser.id,
+            username: currentUser.username,
+            role: currentUser.role,
+          }
+        : null,
+      authState,
+      authError: null,
+    };
+  } catch (error) {
+    return {
+      mode: "database",
+      isAuthenticated: false,
+      currentUser: null,
+      authState: null,
+      authError:
+        error instanceof Error
+          ? `Auth schema do dashboard ainda não está pronta: ${error.message}. Aplique a migration 003_dashboard_auth.sql.`
+          : "Auth schema do dashboard ainda não está pronta. Aplique a migration 003_dashboard_auth.sql.",
+    };
+  }
+};
 
 const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -379,6 +548,56 @@ const html = `<!DOCTYPE html>
 
       .toolbar small {
         color: var(--muted);
+      }
+
+      .view-nav {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 18px;
+      }
+
+      .view-tab {
+        appearance: none;
+        min-height: 42px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.04);
+        color: var(--muted);
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .view-tab.active {
+        background: linear-gradient(135deg, var(--accent), #ff8b5d);
+        color: #111;
+        border-color: transparent;
+      }
+
+      .workspace.is-overview {
+        display: none;
+      }
+
+      [data-view-panel] {
+        display: none;
+      }
+
+      [data-view-panel].active {
+        display: block;
+      }
+
+      .user-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 42px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.04);
+        color: var(--muted);
+        font-size: 0.86rem;
       }
 
       .control,
@@ -619,6 +838,10 @@ const html = `<!DOCTYPE html>
           align-items: stretch;
         }
 
+        .view-nav {
+          flex-direction: column;
+        }
+
         .task-form {
           grid-template-columns: 1fr;
         }
@@ -691,26 +914,40 @@ const html = `<!DOCTYPE html>
         </aside>
       </section>
 
-      <div class="toolbar">
-        <div class="toolbar-group">
-          <button id="refresh-button" type="button">Atualizar Agora</button>
-          <label>
-            Filtrar mensagens
-            <input id="message-filter" class="control" type="text" placeholder="role, conteúdo, data..." />
-          </label>
-          <label>
-            Filtrar logs
-            <input id="log-filter" class="control" type="text" placeholder="level, mensagem..." />
-          </label>
-        </div>
-        <div class="toolbar-group">
-          <small id="last-updated">Aguardando primeira carga...</small>
-          <button id="logout-button" type="button">Sair</button>
-        </div>
-      </div>
+      <nav class="view-nav" id="view-nav">
+        <button class="view-tab active" data-view="overview" type="button">Visão Geral</button>
+        <button class="view-tab" data-view="infra" type="button">Infra</button>
+        <button class="view-tab" data-view="composer" type="button">Composer</button>
+        <button class="view-tab" data-view="tasks" type="button">Tarefas</button>
+        <button class="view-tab" data-view="messages" type="button">Mensagens</button>
+        <button class="view-tab" data-view="telegram" type="button">Telegram</button>
+        <button class="view-tab" data-view="executions" type="button">Execuções</button>
+        <button class="view-tab" data-view="logs" type="button">Logs</button>
+        <button class="view-tab" data-view="settings" type="button">Configurações</button>
+      </nav>
 
-      <section class="content-grid">
-        <article class="panel section">
+      <section class="workspace is-overview" id="workspace">
+        <div class="toolbar">
+          <div class="toolbar-group">
+            <button id="refresh-button" type="button">Atualizar Agora</button>
+            <label>
+              Filtrar mensagens
+              <input id="message-filter" class="control" type="text" placeholder="role, conteúdo, data..." />
+            </label>
+            <label>
+              Filtrar logs
+              <input id="log-filter" class="control" type="text" placeholder="level, mensagem..." />
+            </label>
+          </div>
+          <div class="toolbar-group">
+            <div class="user-pill" id="current-user-pill">Sem sessão identificada</div>
+            <small id="last-updated">Aguardando primeira carga...</small>
+            <button id="logout-button" type="button">Sair</button>
+          </div>
+        </div>
+
+        <section class="content-grid">
+        <article class="panel section" data-view-panel="composer">
           <div class="section-head">
             <h2>Composer</h2>
             <p>Dispare execuções do orquestrador diretamente pelo painel.</p>
@@ -734,7 +971,7 @@ const html = `<!DOCTYPE html>
           <div class="composer-result" id="composer-result">Nenhuma execução disparada nesta sessão do painel.</div>
         </article>
 
-        <article class="panel section">
+        <article class="panel section" data-view-panel="infra">
           <div class="section-head">
             <h2>Providers</h2>
             <p>Capacidade atual dos modelos e estado operacional.</p>
@@ -742,7 +979,7 @@ const html = `<!DOCTYPE html>
           <div class="provider-grid" id="providers-grid"></div>
         </article>
 
-        <article class="panel section">
+        <article class="panel section" data-view-panel="tasks">
           <div class="section-head">
             <h2>Tarefas</h2>
             <p>Tarefas persistidas pela LiNa.</p>
@@ -786,7 +1023,7 @@ const html = `<!DOCTYPE html>
           <div class="feed" id="tasks-feed"></div>
         </article>
 
-        <article class="panel section">
+        <article class="panel section" data-view-panel="messages">
           <div class="section-head">
             <h2>Mensagens Recentes</h2>
             <p>Histórico operacional da conversa persistida.</p>
@@ -806,7 +1043,7 @@ const html = `<!DOCTYPE html>
           <div class="feed" id="messages-feed"></div>
         </article>
 
-        <article class="panel section">
+        <article class="panel section" data-view-panel="telegram">
           <div class="section-head">
             <h2>Telegram</h2>
             <p>Resumo por origem quando os metadados de mensagem estiverem disponíveis.</p>
@@ -814,7 +1051,7 @@ const html = `<!DOCTYPE html>
           <div class="feed" id="telegram-feed"></div>
         </article>
 
-        <article class="panel section">
+        <article class="panel section" data-view-panel="logs">
           <div class="section-head">
             <h2>Logs do Sistema</h2>
             <p>Eventos recentes do runtime para depuração e monitoramento.</p>
@@ -832,7 +1069,7 @@ const html = `<!DOCTYPE html>
           <div class="feed" id="logs-feed"></div>
         </article>
 
-        <article class="panel section">
+        <article class="panel section" data-view-panel="executions">
           <div class="section-head">
             <h2>Execuções</h2>
             <p>Histórico recente do orquestrador com status, provider e resumo.</p>
@@ -856,6 +1093,18 @@ const html = `<!DOCTYPE html>
           </div>
           <div class="feed" id="executions-feed"></div>
         </article>
+
+        <article class="panel section" data-view-panel="settings">
+          <div class="section-head">
+            <h2>Configurações</h2>
+            <p>Controle de autenticação do dashboard e estado do bootstrap do primeiro admin.</p>
+          </div>
+          <div class="task-actions">
+            <button class="task-action" id="bootstrap-toggle-button" type="button">Alternar bootstrap</button>
+          </div>
+          <div class="feed" id="settings-feed"></div>
+        </article>
+        </section>
       </section>
     </main>
 
@@ -868,6 +1117,8 @@ const html = `<!DOCTYPE html>
         tasks: "/api/tasks",
         executions: "/api/executions?limit=30",
         logs: "/api/logs?limit=30",
+        authState: "/dashboard/auth/state",
+        authBootstrapToggle: "/dashboard/auth/bootstrap-toggle",
       };
 
       const dashboardState = {
@@ -878,6 +1129,8 @@ const html = `<!DOCTYPE html>
         tasks: [],
         executions: [],
         logs: [],
+        auth: null,
+        activeView: "overview",
       };
 
       const badgeClass = (value) => {
@@ -1213,6 +1466,62 @@ const html = `<!DOCTYPE html>
         \`).join("");
       };
 
+      const renderSettings = (authPayload) => {
+        const feed = document.getElementById("settings-feed");
+        const pill = document.getElementById("current-user-pill");
+        const toggleButton = document.getElementById("bootstrap-toggle-button");
+
+        if (!authPayload) {
+          pill.textContent = "Sessão sem contexto";
+          toggleButton.disabled = true;
+          renderEmpty(feed, "Autenticação do dashboard indisponível.");
+          return;
+        }
+
+        const currentUser = authPayload.currentUser;
+        const authState = authPayload.authState;
+        const users = authPayload.users || [];
+
+        pill.textContent = currentUser
+          ? safeText(currentUser.username) + " · " + safeText(currentUser.role)
+          : "Sessão sem usuário";
+
+        if (authPayload.mode !== "database") {
+          toggleButton.disabled = true;
+          renderEmpty(feed, "O dashboard está em modo legado de token. O gerenciamento de usuários no banco só aparece no modo database.");
+          return;
+        }
+
+        toggleButton.disabled = false;
+        toggleButton.textContent = authState?.allowAdminBootstrap
+          ? "Desabilitar bootstrap admin"
+          : "Habilitar bootstrap admin";
+
+        const userCards = users.length
+          ? users.map((user) => \`
+              <article class="feed-item">
+                <div class="feed-meta">
+                  <span class="badge \${user.isActive ? "ok" : "bad"}">\${user.isActive ? "ativo" : "inativo"}</span>
+                  <span>\${formatTime(user.createdAt)}</span>
+                </div>
+                <div class="feed-title">\${escapeHtml(user.username)}</div>
+                <div class="feed-body">role: \${escapeHtml(user.role)} | último login: \${escapeHtml(user.lastLoginAt ? formatTime(user.lastLoginAt) : "nunca")}</div>
+              </article>
+            \`).join("")
+          : '<div class="empty">Nenhum usuário cadastrado ainda.</div>';
+
+        feed.innerHTML = [
+          \`<article class="feed-item">
+            <div class="feed-meta">
+              <span class="badge \${authState?.allowAdminBootstrap ? "warn" : "neutral"}">\${authState?.allowAdminBootstrap ? "bootstrap on" : "bootstrap off"}</span>
+              <span>Usuários: \${escapeHtml(authState?.usersCount || 0)}</span>
+            </div>
+            <div class="feed-body">Se o bootstrap estiver habilitado, a tela de login mostrará o formulário para cadastrar um administrador inicial.</div>
+          </article>\`,
+          userCards,
+        ].join("");
+      };
+
       const renderExecutionOptions = (executions) => {
         const select = document.getElementById("execution-filter-provider");
         const currentValue = select.value;
@@ -1247,6 +1556,21 @@ const html = `<!DOCTYPE html>
         document.getElementById("metric-last-source").textContent = safeText(summary.lastActivitySource);
       };
 
+      const applyViewState = () => {
+        const activeView = dashboardState.activeView || "overview";
+        const workspace = document.getElementById("workspace");
+        const tabs = document.querySelectorAll(".view-tab");
+        const panels = document.querySelectorAll("[data-view-panel]");
+
+        workspace.classList.toggle("is-overview", activeView === "overview");
+        tabs.forEach((tab) => {
+          tab.classList.toggle("active", tab.dataset.view === activeView);
+        });
+        panels.forEach((panel) => {
+          panel.classList.toggle("active", panel.dataset.viewPanel === activeView);
+        });
+      };
+
       const fetchJson = async (url) => {
         const response = await fetch(url);
         if (!response.ok) {
@@ -1275,11 +1599,13 @@ const html = `<!DOCTYPE html>
         renderMessages(dashboardState.messages);
         renderTelegramView(dashboardState.messages);
         renderLogs(dashboardState.logs);
+        renderSettings(dashboardState.auth);
+        applyViewState();
       };
 
       const refresh = async () => {
         try {
-          const [health, status, providers, messages, tasks, executions, logs] = await Promise.all([
+          const [health, status, providers, messages, tasks, executions, logs, auth] = await Promise.all([
             fetchJson(endpoints.health),
             fetchJson(endpoints.status),
             fetchJson(endpoints.providers),
@@ -1287,6 +1613,7 @@ const html = `<!DOCTYPE html>
             fetchJson(endpoints.tasks),
             fetchJson(endpoints.executions),
             fetchJson(endpoints.logs),
+            fetchJson(endpoints.authState),
           ]);
 
           dashboardState.health = health;
@@ -1296,6 +1623,7 @@ const html = `<!DOCTYPE html>
           dashboardState.tasks = tasks;
           dashboardState.executions = executions;
           dashboardState.logs = logs;
+          dashboardState.auth = auth;
 
           renderStatus(health, status);
           renderProviders(providers);
@@ -1313,6 +1641,20 @@ const html = `<!DOCTYPE html>
       document.getElementById("logout-button").addEventListener("click", async () => {
         await fetch("/logout", { method: "POST" });
         window.location.reload();
+      });
+      document.getElementById("bootstrap-toggle-button").addEventListener("click", async () => {
+        if (!dashboardState.auth?.authState) {
+          return;
+        }
+
+        try {
+          await sendJson(endpoints.authBootstrapToggle, "POST", {
+            enabled: !dashboardState.auth.authState.allowAdminBootstrap,
+          });
+          await refresh();
+        } catch (error) {
+          document.getElementById("last-updated").textContent = error instanceof Error ? error.message : "Falha ao alterar bootstrap";
+        }
       });
       document.getElementById("task-form").addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -1414,6 +1756,17 @@ const html = `<!DOCTYPE html>
         document.getElementById(id).addEventListener("change", rerenderFeeds);
       });
 
+      document.getElementById("view-nav").addEventListener("click", (event) => {
+        const button = event.target.closest(".view-tab");
+        if (!button) {
+          return;
+        }
+
+        dashboardState.activeView = button.dataset.view || "overview";
+        applyViewState();
+      });
+
+      applyViewState();
       refresh();
       setInterval(refresh, 15000);
     </script>
@@ -1446,41 +1799,164 @@ const proxyRequest = async (
 const server = createServer(async (request, response) => {
   try {
     const url = request.url || "/";
+    const authContext = await getRequestAuthContext(request);
 
-     if (url === "/login" && request.method === "POST") {
+    if (url === "/login" && request.method === "POST") {
       const payload = new URLSearchParams((await readBody(request)).toString("utf8"));
-      const token = payload.get("token") || "";
+      if (dashboardAuthMode === "database") {
+        try {
+          const username = payload.get("username") || "";
+          const password = payload.get("password") || "";
+          const session = await dashboardAuthStore!.authenticate(username, password);
+          response.writeHead(302, {
+            Location: "/",
+            "Set-Cookie": buildSessionCookie(session.token, 60 * 60 * 24 * 7),
+          });
+          response.end();
+          return;
+        } catch (error) {
+          const authState = await dashboardAuthStore!.getAuthState().catch(() => null);
+          response.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
+          response.end(
+            loginHtml({
+              errorMessage: error instanceof Error ? error.message : "Falha ao autenticar.",
+              authState,
+            })
+          );
+          return;
+        }
+      }
 
+      const token = payload.get("token") || "";
       if (!dashboardAccessToken || token === dashboardAccessToken) {
         response.writeHead(302, {
           Location: "/",
-          "Set-Cookie": `lina_dashboard_session=${encodeURIComponent(dashboardSessionValue)}; HttpOnly; SameSite=Lax; Path=/`,
+          "Set-Cookie": buildSessionCookie(dashboardSessionValue, 60 * 60 * 24 * 7),
         });
         response.end();
         return;
       }
 
       response.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
-      response.end(loginHtml("Token inválido."));
+      response.end(loginHtml({ errorMessage: "Token inválido." }));
+      return;
+    }
+
+    if (url === "/bootstrap-admin" && request.method === "POST") {
+      if (dashboardAuthMode !== "database") {
+        sendJson(response, 404, { error: "Bootstrap admin is only available with database auth." });
+        return;
+      }
+
+      const payload = new URLSearchParams((await readBody(request)).toString("utf8"));
+      const username = payload.get("username") || "";
+      const password = payload.get("password") || "";
+      const confirmPassword = payload.get("confirmPassword") || "";
+
+      if (password !== confirmPassword) {
+        response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+        response.end(
+          loginHtml({
+            errorMessage: "A confirmação de senha não confere.",
+            authState: await dashboardAuthStore!.getAuthState().catch(() => null),
+          })
+        );
+        return;
+      }
+
+      try {
+        const session = await dashboardAuthStore!.bootstrapAdmin(username, password);
+        response.writeHead(302, {
+          Location: "/",
+          "Set-Cookie": buildSessionCookie(session.token, 60 * 60 * 24 * 7),
+        });
+        response.end();
+        return;
+      } catch (error) {
+        response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+        response.end(
+          loginHtml({
+            errorMessage: error instanceof Error ? error.message : "Falha ao cadastrar administrador inicial.",
+            authState: await dashboardAuthStore!.getAuthState().catch(() => null),
+          })
+        );
+        return;
+      }
+    }
+
+    if (url === "/dashboard/auth/state" && request.method === "GET") {
+      if (authContext.authError) {
+        sendJson(response, 503, { error: authContext.authError });
+        return;
+      }
+
+      if (!authContext.isAuthenticated) {
+        sendJson(response, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      if (dashboardAuthMode !== "database") {
+        sendJson(response, 200, {
+          mode: dashboardAuthMode,
+          currentUser: authContext.currentUser,
+          authState: authContext.authState,
+          users: [],
+        });
+        return;
+      }
+
+      sendJson(response, 200, {
+        mode: dashboardAuthMode,
+        currentUser: authContext.currentUser,
+        authState: await dashboardAuthStore!.getAuthState(),
+        users: await dashboardAuthStore!.listUsers(),
+      });
+      return;
+    }
+
+    if (url === "/dashboard/auth/bootstrap-toggle" && request.method === "POST") {
+      if (!authContext.isAuthenticated || dashboardAuthMode !== "database") {
+        sendJson(response, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      const rawBody = JSON.parse((await readBody(request)).toString("utf8") || "{}") as {
+        enabled?: boolean;
+      };
+      await dashboardAuthStore!.setAllowAdminBootstrap(Boolean(rawBody.enabled));
+      sendJson(response, 200, {
+        ok: true,
+        authState: await dashboardAuthStore!.getAuthState(),
+      });
       return;
     }
 
     if (url === "/logout" && request.method === "POST") {
+      if (dashboardAuthMode === "database") {
+        const token = parseCookies(request.headers.cookie)[dashboardSessionCookieName];
+        await dashboardAuthStore!.revokeSession(token);
+      }
+
       response.writeHead(204, {
-        "Set-Cookie": "lina_dashboard_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+        "Set-Cookie": clearSessionCookie(),
       });
       response.end();
       return;
     }
 
-    if (!isAuthenticated(request)) {
+    if (!authContext.isAuthenticated) {
       if (url.startsWith("/api/")) {
         sendJson(response, 401, { error: "Unauthorized" });
         return;
       }
 
       response.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
-      response.end(loginHtml());
+      response.end(
+        loginHtml({
+          authState: authContext.authState,
+          infoMessage: authContext.authError || undefined,
+        })
+      );
       return;
     }
 
