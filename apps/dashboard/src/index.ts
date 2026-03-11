@@ -1,5 +1,6 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 const parseDotEnv = (): Record<string, string> => {
   if (!existsSync(".env")) {
@@ -28,6 +29,10 @@ const readEnv = (key: string, fallback: string): string => process.env[key] || f
 
 const dashboardPort = Number.parseInt(readEnv("DASHBOARD_PORT", "3001"), 10);
 const apiBaseUrl = readEnv("DASHBOARD_API_BASE", `http://localhost:${readEnv("APP_PORT", "3012")}`);
+const dashboardAccessToken = readEnv("DASHBOARD_ACCESS_TOKEN", "");
+const dashboardSessionValue = dashboardAccessToken
+  ? createHash("sha256").update(dashboardAccessToken).digest("hex")
+  : "";
 
 const sendJson = (response: ServerResponse, status: number, payload: unknown) => {
   response.writeHead(status, { "Content-Type": "application/json" });
@@ -43,6 +48,109 @@ const readBody = async (request: IncomingMessage): Promise<Buffer> => {
 
   return Buffer.concat(chunks);
 };
+
+const parseCookies = (cookieHeader?: string): Record<string, string> =>
+  (cookieHeader || "")
+    .split(";")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .reduce<Record<string, string>>((accumulator, entry) => {
+      const separatorIndex = entry.indexOf("=");
+      if (separatorIndex < 0) {
+        return accumulator;
+      }
+
+      const key = entry.slice(0, separatorIndex).trim();
+      const value = entry.slice(separatorIndex + 1).trim();
+      accumulator[key] = decodeURIComponent(value);
+      return accumulator;
+    }, {});
+
+const isAuthenticated = (request: IncomingMessage): boolean => {
+  if (!dashboardAccessToken) {
+    return true;
+  }
+
+  const cookies = parseCookies(request.headers.cookie);
+  return cookies.lina_dashboard_session === dashboardSessionValue;
+};
+
+const loginHtml = (errorMessage?: string) => `<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LiNa Dashboard Login</title>
+    <style>
+      :root {
+        --bg: #07111f;
+        --panel: rgba(11, 19, 34, 0.9);
+        --line: rgba(117, 138, 173, 0.22);
+        --text: #edf4ff;
+        --muted: #8da2c5;
+        --accent: #ffb54d;
+        --bad: #ff7b7b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at top left, rgba(255, 181, 77, 0.12), transparent 24%),
+          linear-gradient(160deg, #07111f 0%, #0a1628 55%, #09101a 100%);
+        color: var(--text);
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      }
+      .card {
+        width: min(460px, calc(100% - 24px));
+        padding: 28px;
+        border-radius: 24px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-family: "Space Grotesk", sans-serif;
+        letter-spacing: -0.04em;
+      }
+      p { color: var(--muted); line-height: 1.6; }
+      form { display: grid; gap: 12px; margin-top: 18px; }
+      input, button {
+        min-height: 48px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.04);
+        color: var(--text);
+        padding: 0 14px;
+      }
+      button {
+        border: 0;
+        cursor: pointer;
+        background: linear-gradient(135deg, var(--accent), #ff8b5d);
+        color: #111;
+        font-weight: 800;
+      }
+      .error {
+        margin-top: 10px;
+        color: var(--bad);
+        font-size: 0.92rem;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="card">
+      <h1>LiNa Dashboard</h1>
+      <p>Este painel controla tarefas, execuções, logs e o composer do orquestrador. Autentique-se para continuar.</p>
+      <form method="POST" action="/login">
+        <input type="password" name="token" placeholder="Access token" required />
+        <button type="submit">Entrar</button>
+      </form>
+      ${errorMessage ? `<div class="error">${errorMessage}</div>` : ""}
+    </section>
+  </body>
+</html>`;
 
 const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -555,7 +663,10 @@ const html = `<!DOCTYPE html>
             <input id="log-filter" class="control" type="text" placeholder="level, mensagem..." />
           </label>
         </div>
-        <small id="last-updated">Aguardando primeira carga...</small>
+        <div class="toolbar-group">
+          <small id="last-updated">Aguardando primeira carga...</small>
+          <button id="logout-button" type="button">Sair</button>
+        </div>
       </div>
 
       <section class="content-grid">
@@ -1002,6 +1113,10 @@ const html = `<!DOCTYPE html>
       };
 
       document.getElementById("refresh-button").addEventListener("click", refresh);
+      document.getElementById("logout-button").addEventListener("click", async () => {
+        await fetch("/logout", { method: "POST" });
+        window.location.reload();
+      });
       document.getElementById("task-form").addEventListener("submit", async (event) => {
         event.preventDefault();
 
@@ -1132,6 +1247,43 @@ const proxyRequest = async (
 const server = createServer(async (request, response) => {
   try {
     const url = request.url || "/";
+
+     if (url === "/login" && request.method === "POST") {
+      const payload = new URLSearchParams((await readBody(request)).toString("utf8"));
+      const token = payload.get("token") || "";
+
+      if (!dashboardAccessToken || token === dashboardAccessToken) {
+        response.writeHead(302, {
+          Location: "/",
+          "Set-Cookie": `lina_dashboard_session=${encodeURIComponent(dashboardSessionValue)}; HttpOnly; SameSite=Lax; Path=/`,
+        });
+        response.end();
+        return;
+      }
+
+      response.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(loginHtml("Token inválido."));
+      return;
+    }
+
+    if (url === "/logout" && request.method === "POST") {
+      response.writeHead(204, {
+        "Set-Cookie": "lina_dashboard_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+      });
+      response.end();
+      return;
+    }
+
+    if (!isAuthenticated(request)) {
+      if (url.startsWith("/api/")) {
+        sendJson(response, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      response.writeHead(401, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(loginHtml());
+      return;
+    }
 
     if (url === "/") {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
