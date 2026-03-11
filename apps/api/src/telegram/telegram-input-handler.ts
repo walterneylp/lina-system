@@ -4,6 +4,7 @@ import { MemoryManager } from "../core/memory/memory-manager";
 import { AudioPreprocessor } from "./audio-preprocessor";
 import { TelegramClient } from "./telegram-client";
 import { GroqAudioTranscriber } from "./groq-audio-transcriber";
+import { TelegramCommandService } from "./telegram-command-service";
 import { TelegramOutputHandler } from "./telegram-output-handler";
 import { TelegramUpdate } from "./telegram.types";
 
@@ -15,6 +16,7 @@ type TelegramInputHandlerOptions = {
   outputHandler: TelegramOutputHandler;
   audioTranscriber: GroqAudioTranscriber;
   audioPreprocessor: AudioPreprocessor;
+  commandService: TelegramCommandService;
 };
 
 export class TelegramInputHandler {
@@ -60,6 +62,29 @@ export class TelegramInputHandler {
     text: string,
     metadata?: ConversationMessageMetadata
   ): Promise<void> {
+    const commandReply = await this.options.commandService.handle(text);
+
+    if (commandReply) {
+      await this.options.memoryManager.log(
+        "info",
+        `[telegram-command] ${metadata?.username || metadata?.userId || "unknown"} -> ${text}`
+      );
+      await this.options.memoryManager.append("user", text, metadata);
+      await this.options.memoryManager.append("assistant", commandReply, {
+        source: "telegram",
+        channel: "telegram",
+        chatId,
+        chatType: metadata?.chatType || null,
+        userId: metadata?.userId || null,
+        username: metadata?.username || null,
+        firstName: metadata?.firstName || null,
+        messageType: "text",
+        transportMessageId: null,
+      });
+      await this.options.outputHandler.sendText(chatId, commandReply);
+      return;
+    }
+
     await this.options.memoryManager.append("user", text, metadata);
 
     const greetingReply = this.buildGreetingReply(text, metadata);
