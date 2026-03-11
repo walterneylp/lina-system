@@ -345,6 +345,22 @@ const html = `<!DOCTYPE html>
         --radius: 24px;
       }
 
+      body[data-theme="light"] {
+        --bg: #eef3fb;
+        --bg-soft: #dfe7f4;
+        --panel: rgba(255, 255, 255, 0.9);
+        --panel-strong: #ffffff;
+        --line: rgba(72, 91, 124, 0.16);
+        --text: #102036;
+        --muted: #5f7394;
+        --accent: #ef9b28;
+        --accent-soft: rgba(239, 155, 40, 0.16);
+        --good: #188c65;
+        --warn: #b27a00;
+        --bad: #c75454;
+        --shadow: 0 24px 60px rgba(31, 50, 84, 0.12);
+      }
+
       * { box-sizing: border-box; }
 
       body {
@@ -358,9 +374,33 @@ const html = `<!DOCTYPE html>
           linear-gradient(160deg, #07111f 0%, #0a1628 55%, #09101a 100%);
       }
 
+      body[data-theme="light"] {
+        background:
+          radial-gradient(circle at top left, rgba(239, 155, 40, 0.14), transparent 22%),
+          radial-gradient(circle at bottom right, rgba(24, 140, 101, 0.1), transparent 18%),
+          linear-gradient(160deg, #eff5fd 0%, #e8f0fa 56%, #dde6f3 100%);
+      }
+
       .shell {
         width: min(1440px, calc(100% - 32px));
         margin: 20px auto 40px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 18px;
+        padding: 16px 18px;
+      }
+
+      .topbar-left,
+      .topbar-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
       }
 
       .hero {
@@ -519,15 +559,7 @@ const html = `<!DOCTYPE html>
       .badge.bad { background: rgba(255, 123, 123, 0.14); color: var(--bad); }
       .badge.neutral { background: rgba(141, 162, 197, 0.14); color: var(--muted); }
 
-      .toolbar {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 18px;
-        flex-wrap: wrap;
-      }
-
+      .topbar button,
       .toolbar button {
         appearance: none;
         border: 0;
@@ -539,13 +571,7 @@ const html = `<!DOCTYPE html>
         cursor: pointer;
       }
 
-      .toolbar-group {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-
+      .topbar small,
       .toolbar small {
         color: var(--muted);
       }
@@ -554,7 +580,6 @@ const html = `<!DOCTYPE html>
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
-        margin-bottom: 18px;
       }
 
       .view-tab {
@@ -624,6 +649,22 @@ const html = `<!DOCTYPE html>
         gap: 6px;
         color: var(--muted);
         font-size: 0.82rem;
+      }
+
+      .subtools {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+      }
+
+      .subtools-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
       }
 
       .task-form {
@@ -709,14 +750,16 @@ const html = `<!DOCTYPE html>
         min-width: 170px;
       }
 
-      .content-grid {
-        display: grid;
-        grid-template-columns: 1.05fr 0.95fr;
-        gap: 18px;
+      .page-stack {
+        display: block;
       }
 
       .section {
         padding: 22px;
+      }
+
+      .page-panel {
+        width: 100%;
       }
 
       .section h2 {
@@ -798,6 +841,13 @@ const html = `<!DOCTYPE html>
         font-size: 0.88rem;
       }
 
+      .theme-toggle {
+        min-width: 126px;
+        background: rgba(255,255,255,0.05) !important;
+        color: var(--text) !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+      }
+
       .empty {
         padding: 18px;
         border-radius: 16px;
@@ -806,8 +856,7 @@ const html = `<!DOCTYPE html>
       }
 
       @media (max-width: 1100px) {
-        .hero,
-        .content-grid {
+        .hero {
           grid-template-columns: 1fr;
         }
 
@@ -833,8 +882,11 @@ const html = `<!DOCTYPE html>
           grid-template-columns: 1fr;
         }
 
-        .toolbar {
+        .topbar,
+        .toolbar,
+        .subtools {
           flex-direction: column;
+          grid-template-columns: 1fr;
           align-items: stretch;
         }
 
@@ -854,6 +906,29 @@ const html = `<!DOCTYPE html>
   </head>
   <body>
     <main class="shell">
+      <header class="panel topbar">
+        <div class="topbar-left">
+          <nav class="view-nav" id="view-nav">
+            <button class="view-tab active" data-view="overview" type="button">Visão Geral</button>
+            <button class="view-tab" data-view="infra" type="button">Infra</button>
+            <button class="view-tab" data-view="composer" type="button">Composer</button>
+            <button class="view-tab" data-view="tasks" type="button">Tarefas</button>
+            <button class="view-tab" data-view="messages" type="button">Mensagens</button>
+            <button class="view-tab" data-view="telegram" type="button">Telegram</button>
+            <button class="view-tab" data-view="executions" type="button">Execuções</button>
+            <button class="view-tab" data-view="logs" type="button">Logs</button>
+            <button class="view-tab" data-view="settings" type="button">Configurações</button>
+          </nav>
+        </div>
+        <div class="topbar-right">
+          <div class="user-pill" id="current-user-pill">Sem sessão identificada</div>
+          <small id="last-updated">Aguardando primeira carga...</small>
+          <button id="theme-toggle-button" class="theme-toggle" type="button">Tema claro</button>
+          <button id="refresh-button" type="button">Atualizar Agora</button>
+          <button id="logout-button" type="button">Sair</button>
+        </div>
+      </header>
+
       <section class="hero">
         <article class="panel hero-main">
           <div class="eyebrow"><span class="pulse"></span> LiNa Control Room</div>
@@ -914,40 +989,18 @@ const html = `<!DOCTYPE html>
         </aside>
       </section>
 
-      <nav class="view-nav" id="view-nav">
-        <button class="view-tab active" data-view="overview" type="button">Visão Geral</button>
-        <button class="view-tab" data-view="infra" type="button">Infra</button>
-        <button class="view-tab" data-view="composer" type="button">Composer</button>
-        <button class="view-tab" data-view="tasks" type="button">Tarefas</button>
-        <button class="view-tab" data-view="messages" type="button">Mensagens</button>
-        <button class="view-tab" data-view="telegram" type="button">Telegram</button>
-        <button class="view-tab" data-view="executions" type="button">Execuções</button>
-        <button class="view-tab" data-view="logs" type="button">Logs</button>
-        <button class="view-tab" data-view="settings" type="button">Configurações</button>
-      </nav>
-
       <section class="workspace is-overview" id="workspace">
-        <div class="toolbar">
-          <div class="toolbar-group">
-            <button id="refresh-button" type="button">Atualizar Agora</button>
-            <label>
-              Filtrar mensagens
-              <input id="message-filter" class="control" type="text" placeholder="role, conteúdo, data..." />
-            </label>
-            <label>
-              Filtrar logs
-              <input id="log-filter" class="control" type="text" placeholder="level, mensagem..." />
-            </label>
-          </div>
-          <div class="toolbar-group">
-            <div class="user-pill" id="current-user-pill">Sem sessão identificada</div>
-            <small id="last-updated">Aguardando primeira carga...</small>
-            <button id="logout-button" type="button">Sair</button>
+        <div class="subtools">
+          <div>
+            <div class="eyebrow">Workspace</div>
+            <p class="hero-copy" style="margin:10px 0 0; max-width:72ch;">
+              As seções abaixo ocupam a área operacional principal. A visão geral continua acima, e cada opção do menu abre sua própria página nesta faixa inferior.
+            </p>
           </div>
         </div>
 
-        <section class="content-grid">
-        <article class="panel section" data-view-panel="composer">
+        <section class="page-stack">
+        <article class="panel section page-panel" data-view-panel="composer">
           <div class="section-head">
             <h2>Composer</h2>
             <p>Dispare execuções do orquestrador diretamente pelo painel.</p>
@@ -971,7 +1024,7 @@ const html = `<!DOCTYPE html>
           <div class="composer-result" id="composer-result">Nenhuma execução disparada nesta sessão do painel.</div>
         </article>
 
-        <article class="panel section" data-view-panel="infra">
+        <article class="panel section page-panel" data-view-panel="infra">
           <div class="section-head">
             <h2>Providers</h2>
             <p>Capacidade atual dos modelos e estado operacional.</p>
@@ -979,7 +1032,7 @@ const html = `<!DOCTYPE html>
           <div class="provider-grid" id="providers-grid"></div>
         </article>
 
-        <article class="panel section" data-view-panel="tasks">
+        <article class="panel section page-panel" data-view-panel="tasks">
           <div class="section-head">
             <h2>Tarefas</h2>
             <p>Tarefas persistidas pela LiNa.</p>
@@ -1023,12 +1076,16 @@ const html = `<!DOCTYPE html>
           <div class="feed" id="tasks-feed"></div>
         </article>
 
-        <article class="panel section" data-view-panel="messages">
+        <article class="panel section page-panel" data-view-panel="messages">
           <div class="section-head">
             <h2>Mensagens Recentes</h2>
             <p>Histórico operacional da conversa persistida.</p>
           </div>
           <div class="section-tools">
+            <label>
+              Busca
+              <input id="message-filter" class="control" type="text" placeholder="role, conteúdo, data..." />
+            </label>
             <label>
               Role
               <select id="message-filter-role" class="control">
@@ -1043,7 +1100,7 @@ const html = `<!DOCTYPE html>
           <div class="feed" id="messages-feed"></div>
         </article>
 
-        <article class="panel section" data-view-panel="telegram">
+        <article class="panel section page-panel" data-view-panel="telegram">
           <div class="section-head">
             <h2>Telegram</h2>
             <p>Resumo por origem quando os metadados de mensagem estiverem disponíveis.</p>
@@ -1051,12 +1108,16 @@ const html = `<!DOCTYPE html>
           <div class="feed" id="telegram-feed"></div>
         </article>
 
-        <article class="panel section" data-view-panel="logs">
+        <article class="panel section page-panel" data-view-panel="logs">
           <div class="section-head">
             <h2>Logs do Sistema</h2>
             <p>Eventos recentes do runtime para depuração e monitoramento.</p>
           </div>
           <div class="section-tools">
+            <label>
+              Busca
+              <input id="log-filter" class="control" type="text" placeholder="level, mensagem..." />
+            </label>
             <label>
               Level
               <select id="log-filter-level" class="control">
@@ -1069,7 +1130,7 @@ const html = `<!DOCTYPE html>
           <div class="feed" id="logs-feed"></div>
         </article>
 
-        <article class="panel section" data-view-panel="executions">
+        <article class="panel section page-panel" data-view-panel="executions">
           <div class="section-head">
             <h2>Execuções</h2>
             <p>Histórico recente do orquestrador com status, provider e resumo.</p>
@@ -1094,7 +1155,7 @@ const html = `<!DOCTYPE html>
           <div class="feed" id="executions-feed"></div>
         </article>
 
-        <article class="panel section" data-view-panel="settings">
+        <article class="panel section page-panel" data-view-panel="settings">
           <div class="section-head">
             <h2>Configurações</h2>
             <p>Controle de autenticação do dashboard e estado do bootstrap do primeiro admin.</p>
@@ -1131,6 +1192,7 @@ const html = `<!DOCTYPE html>
         logs: [],
         auth: null,
         activeView: "overview",
+        theme: localStorage.getItem("lina-dashboard-theme") || "dark",
       };
 
       const badgeClass = (value) => {
@@ -1156,6 +1218,15 @@ const html = `<!DOCTYPE html>
         if (!value) return "Sem data";
         const date = new Date(value);
         return Number.isNaN(date.getTime()) ? safeText(value) : date.toLocaleString("pt-BR");
+      };
+
+      const applyTheme = () => {
+        const theme = dashboardState.theme === "light" ? "light" : "dark";
+        document.body.dataset.theme = theme;
+        const button = document.getElementById("theme-toggle-button");
+        if (button) {
+          button.textContent = theme === "dark" ? "Tema claro" : "Tema escuro";
+        }
       };
 
       const renderEmpty = (container, label) => {
@@ -1638,6 +1709,11 @@ const html = `<!DOCTYPE html>
       };
 
       document.getElementById("refresh-button").addEventListener("click", refresh);
+      document.getElementById("theme-toggle-button").addEventListener("click", () => {
+        dashboardState.theme = dashboardState.theme === "dark" ? "light" : "dark";
+        localStorage.setItem("lina-dashboard-theme", dashboardState.theme);
+        applyTheme();
+      });
       document.getElementById("logout-button").addEventListener("click", async () => {
         await fetch("/logout", { method: "POST" });
         window.location.reload();
@@ -1766,6 +1842,7 @@ const html = `<!DOCTYPE html>
         applyViewState();
       });
 
+      applyTheme();
       applyViewState();
       refresh();
       setInterval(refresh, 15000);
