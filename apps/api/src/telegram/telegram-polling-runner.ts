@@ -5,6 +5,7 @@ type TelegramPollingRunnerOptions = {
   client: TelegramClient;
   inputHandler: TelegramInputHandler;
   pollingIntervalMs: number;
+  discardPendingUpdatesOnStart?: boolean;
 };
 
 export class TelegramPollingRunner {
@@ -19,7 +20,31 @@ export class TelegramPollingRunner {
     }
 
     this.active = true;
-    void this.loop();
+    void this.initializeAndLoop();
+  }
+
+  private async initializeAndLoop(): Promise<void> {
+    if (this.options.discardPendingUpdatesOnStart !== false) {
+      await this.discardPendingUpdates();
+    }
+
+    await this.loop();
+  }
+
+  private async discardPendingUpdates(): Promise<void> {
+    try {
+      const pendingUpdates = await this.options.client.getUpdates(undefined, 0);
+      const lastUpdate = pendingUpdates.at(-1);
+
+      if (lastUpdate) {
+        this.offset = lastUpdate.update_id + 1;
+        console.log(
+          `[LiNa][telegram] discarded ${pendingUpdates.length} pending update(s) on startup`
+        );
+      }
+    } catch (error) {
+      console.error("[LiNa][telegram] failed to discard pending updates", error);
+    }
   }
 
   private async loop(): Promise<void> {

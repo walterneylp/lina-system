@@ -21,11 +21,11 @@ export class GroqAudioTranscriber {
 
     const formData = new FormData();
     const binary = new Uint8Array(input.content);
-    const blob = new Blob([binary], {
+    const file = new File([binary], input.filename, {
       type: input.mimeType || "application/octet-stream",
     });
 
-    formData.append("file", blob, input.filename);
+    formData.append("file", file);
     formData.append("model", this.options.model);
     formData.append("response_format", "verbose_json");
     formData.append("language", "pt");

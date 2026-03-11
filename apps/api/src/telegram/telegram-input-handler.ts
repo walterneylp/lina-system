@@ -1,5 +1,6 @@
 import { LinaOrchestrator } from "../core/orchestrator/orchestrator";
 import { MemoryManager } from "../core/memory/memory-manager";
+import { AudioPreprocessor } from "./audio-preprocessor";
 import { TelegramClient } from "./telegram-client";
 import { GroqAudioTranscriber } from "./groq-audio-transcriber";
 import { TelegramOutputHandler } from "./telegram-output-handler";
@@ -12,6 +13,7 @@ type TelegramInputHandlerOptions = {
   client: TelegramClient;
   outputHandler: TelegramOutputHandler;
   audioTranscriber: GroqAudioTranscriber;
+  audioPreprocessor: AudioPreprocessor;
 };
 
 export class TelegramInputHandler {
@@ -37,6 +39,7 @@ export class TelegramInputHandler {
       await this.processAudio(
         chatId,
         voice?.file_id || audio?.file_id || "",
+        voice ? "voice" : "audio",
         voice?.mime_type || audio?.mime_type,
         audio?.file_name
       );
@@ -62,6 +65,7 @@ export class TelegramInputHandler {
   private async processAudio(
     chatId: string,
     fileId: string,
+    sourceType: "voice" | "audio",
     mimeType?: string,
     preferredFileName?: string
   ): Promise<void> {
@@ -87,11 +91,37 @@ export class TelegramInputHandler {
       }
 
       const downloadedFile = await this.options.client.downloadFile(file.file_path);
-      const filename = preferredFileName || file.file_path.split("/").pop() || "telegram-audio.ogg";
-      const transcript = await this.options.audioTranscriber.transcribe({
+      const filename = this.resolveAudioFilename(
+        sourceType,
+        preferredFileName,
+        file.file_path,
+        mimeType
+      );
+      const normalizedMimeType = this.normalizeAudioMimeType(sourceType, mimeType);
+      console.log("[LiNa][telegram][audio]", {
+        sourceType,
+        telegramFilePath: file.file_path,
+        filename,
+        mimeType: normalizedMimeType,
+        bytes: downloadedFile.content.length,
+      });
+      const normalizedAudio = await this.options.audioPreprocessor.transcodeToWav({
         filename,
         content: downloadedFile.content,
-        mimeType,
+      });
+      console.log("[LiNa][telegram][audio-normalized]", {
+        filename: normalizedAudio.filename,
+        mimeType: normalizedAudio.mimeType,
+        bytes: normalizedAudio.content.length,
+      });
+      const transcript = await this.options.audioTranscriber.transcribe({
+        filename: normalizedAudio.filename,
+        content: normalizedAudio.content,
+        mimeType: normalizedAudio.mimeType,
+      });
+      console.log("[LiNa][telegram][transcript]", {
+        empty: !transcript,
+        preview: transcript.slice(0, 120),
       });
 
       if (!transcript) {
@@ -109,6 +139,67 @@ export class TelegramInputHandler {
         chatId,
         `Falha ao processar o audio: ${message}`
       );
+    }
+  }
+
+  private resolveAudioFilename(
+    sourceType: "voice" | "audio",
+    preferredFileName?: string,
+    telegramFilePath?: string,
+    mimeType?: string
+  ): string {
+    if (sourceType === "voice") {
+      return "telegram-voice.ogg";
+    }
+
+    const candidate = preferredFileName || telegramFilePath?.split("/").pop() || "telegram-audio";
+
+    if (candidate.includes(".")) {
+      return this.normalizeSupportedAudioFilename(candidate);
+    }
+
+    const extension = this.inferAudioExtension(mimeType);
+    return `${candidate}.${extension}`;
+  }
+
+  private normalizeSupportedAudioFilename(filename: string): string {
+    const normalized = filename.replace(/\.oga$/i, ".ogg");
+    return normalized.replace(/\.mpeg3$/i, ".mp3");
+  }
+
+  private normalizeAudioMimeType(
+    sourceType: "voice" | "audio",
+    mimeType?: string
+  ): string {
+    if (sourceType === "voice") {
+      return "audio/ogg";
+    }
+
+    return mimeType || "audio/ogg";
+  }
+
+  private inferAudioExtension(mimeType?: string): string {
+    switch (mimeType) {
+      case "audio/ogg":
+        return "ogg";
+      case "audio/opus":
+        return "opus";
+      case "audio/mpeg":
+        return "mp3";
+      case "audio/mp4":
+        return "mp4";
+      case "audio/x-m4a":
+      case "audio/m4a":
+        return "m4a";
+      case "audio/wav":
+      case "audio/x-wav":
+        return "wav";
+      case "audio/webm":
+        return "webm";
+      case "audio/flac":
+        return "flac";
+      default:
+        return "ogg";
     }
   }
 
