@@ -1,6 +1,7 @@
 import { MemoryStore } from "./memory-store.interface";
 import {
   ConversationMessage,
+  ConversationMessageMetadata,
   LinaExecutionRecord,
   LinaExecutionUpdate,
   LinaSystemLogRecord,
@@ -29,9 +30,13 @@ export class MemoryManager {
     return conversation.id;
   }
 
-  public async append(role: MemoryRole, content: string): Promise<ConversationMessage> {
+  public async append(
+    role: MemoryRole,
+    content: string,
+    metadata?: ConversationMessageMetadata
+  ): Promise<ConversationMessage> {
     const conversationId = await this.ensureConversation();
-    return this.store.appendMessage(role, content, conversationId);
+    return this.store.appendMessage(role, content, conversationId, metadata);
   }
 
   public async getConversation(): Promise<ConversationMessage[]> {

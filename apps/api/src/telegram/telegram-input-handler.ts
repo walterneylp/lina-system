@@ -1,4 +1,5 @@
 import { LinaOrchestrator } from "../core/orchestrator/orchestrator";
+import { ConversationMessageMetadata } from "../core/memory/memory.types";
 import { MemoryManager } from "../core/memory/memory-manager";
 import { AudioPreprocessor } from "./audio-preprocessor";
 import { TelegramClient } from "./telegram-client";
@@ -25,13 +26,14 @@ export class TelegramInputHandler {
     const text = update.message?.text?.trim();
     const voice = update.message?.voice;
     const audio = update.message?.audio;
+    const metadata = this.buildMetadata(update, voice ? "voice" : audio ? "audio" : "text");
 
     if (!chatId || !this.isAllowed(userId)) {
       return;
     }
 
     if (text) {
-      await this.processText(chatId, text);
+      await this.processText(chatId, text, metadata);
       return;
     }
 
@@ -41,7 +43,8 @@ export class TelegramInputHandler {
         voice?.file_id || audio?.file_id || "",
         voice ? "voice" : "audio",
         voice?.mime_type || audio?.mime_type,
-        audio?.file_name
+        audio?.file_name,
+        metadata
       );
       return;
     }
@@ -52,13 +55,27 @@ export class TelegramInputHandler {
     );
   }
 
-  private async processText(chatId: string, text: string): Promise<void> {
-    await this.options.memoryManager.append("user", text);
+  private async processText(
+    chatId: string,
+    text: string,
+    metadata?: ConversationMessageMetadata
+  ): Promise<void> {
+    await this.options.memoryManager.append("user", text, metadata);
     await this.options.client.sendChatAction(chatId, "typing");
 
     const result = await this.options.orchestrator.handle({ text });
 
-    await this.options.memoryManager.append("assistant", result.answer);
+    await this.options.memoryManager.append("assistant", result.answer, {
+      source: "telegram",
+      channel: "telegram",
+      chatId,
+      chatType: metadata?.chatType || null,
+      userId: metadata?.userId || null,
+      username: metadata?.username || null,
+      firstName: metadata?.firstName || null,
+      messageType: "text",
+      transportMessageId: null,
+    });
     await this.options.outputHandler.sendText(chatId, result.answer);
   }
 
@@ -67,7 +84,8 @@ export class TelegramInputHandler {
     fileId: string,
     sourceType: "voice" | "audio",
     mimeType?: string,
-    preferredFileName?: string
+    preferredFileName?: string,
+    metadata?: ConversationMessageMetadata
   ): Promise<void> {
     if (!fileId) {
       await this.options.outputHandler.sendText(chatId, "Nao consegui identificar o arquivo de audio.");
@@ -132,7 +150,7 @@ export class TelegramInputHandler {
         return;
       }
 
-      await this.processText(chatId, transcript);
+      await this.processText(chatId, transcript, metadata);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha desconhecida ao processar audio";
       await this.options.outputHandler.sendText(
@@ -209,5 +227,22 @@ export class TelegramInputHandler {
     }
 
     return this.options.allowedUserIds.includes(userId);
+  }
+
+  private buildMetadata(
+    update: TelegramUpdate,
+    messageType: ConversationMessageMetadata["messageType"]
+  ): ConversationMessageMetadata {
+    return {
+      source: "telegram",
+      channel: "telegram",
+      chatId: update.message?.chat?.id ? String(update.message.chat.id) : null,
+      chatType: update.message?.chat?.type || null,
+      userId: update.message?.from?.id ? String(update.message.from.id) : null,
+      username: update.message?.from?.username || update.message?.chat?.username || null,
+      firstName: update.message?.from?.first_name || null,
+      messageType,
+      transportMessageId: update.message?.message_id ? String(update.message.message_id) : null,
+    };
   }
 }

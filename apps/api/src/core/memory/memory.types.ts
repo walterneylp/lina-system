@@ -1,11 +1,24 @@
 export type MemoryRole = "system" | "user" | "assistant" | "tool";
 
+export type ConversationMessageMetadata = {
+  source?: "telegram" | "dashboard" | "api" | "system";
+  channel?: string;
+  chatId?: string | null;
+  chatType?: string | null;
+  userId?: string | null;
+  username?: string | null;
+  firstName?: string | null;
+  messageType?: "text" | "voice" | "audio" | "system";
+  transportMessageId?: string | null;
+};
+
 export type ConversationMessage = {
   id?: string;
   conversationId?: string;
   role: MemoryRole;
   content: string;
   createdAt: string;
+  metadata?: ConversationMessageMetadata;
 };
 
 export type PersistenceHealth = {

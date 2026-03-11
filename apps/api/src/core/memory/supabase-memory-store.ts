@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { MemoryStore } from "./memory-store.interface";
 import {
   ConversationMessage,
+  ConversationMessageMetadata,
   LinaExecutionRecord,
   LinaExecutionUpdate,
   LinaSystemLogRecord,
@@ -18,6 +19,7 @@ type SupabaseMemoryStoreOptions = {
 
 export class SupabaseMemoryStore implements MemoryStore {
   private readonly client: SupabaseClient;
+  private messageMetadataSupport?: boolean;
 
   constructor(private readonly options: SupabaseMemoryStoreOptions) {
     this.client = createClient(options.url, options.serviceRoleKey, {
@@ -67,51 +69,62 @@ export class SupabaseMemoryStore implements MemoryStore {
   public async appendMessage(
     role: MemoryRole,
     content: string,
-    conversationId?: string
+    conversationId?: string,
+    metadata?: ConversationMessageMetadata
   ): Promise<ConversationMessage> {
     const activeConversation =
       conversationId ? { id: conversationId } : await this.createConversation();
 
+    const supportsMetadata = await this.supportsMessageMetadata();
+    const insertPayload: Record<string, string | null> = {
+      conversation_id: activeConversation.id,
+      role,
+      content,
+    };
+
+    if (supportsMetadata) {
+      insertPayload.source = metadata?.source || null;
+      insertPayload.channel = metadata?.channel || null;
+      insertPayload.chat_id = metadata?.chatId || null;
+      insertPayload.chat_type = metadata?.chatType || null;
+      insertPayload.user_id = metadata?.userId || null;
+      insertPayload.username = metadata?.username || null;
+      insertPayload.first_name = metadata?.firstName || null;
+      insertPayload.message_type = metadata?.messageType || null;
+      insertPayload.transport_message_id = metadata?.transportMessageId || null;
+    }
+
     const { data, error } = await this.client
       .from("messages")
-      .insert({
-        conversation_id: activeConversation.id,
-        role,
-        content,
-      })
-      .select("id, conversation_id, role, content, created_at")
+      .insert(insertPayload)
+      .select(this.messageSelectClause(supportsMetadata))
       .single();
 
     if (error || !data) {
       throw new Error(`Failed to append message: ${error?.message || "unknown error"}`);
     }
 
-    return {
-      id: data.id,
-      conversationId: data.conversation_id,
-      role: data.role as MemoryRole,
-      content: data.content,
-      createdAt: data.created_at,
-    };
+    return this.mapMessageRecord(
+      data as unknown as Record<string, string | null | undefined>,
+      supportsMetadata
+    );
   }
 
   public async listMessages(): Promise<ConversationMessage[]> {
+    const supportsMetadata = await this.supportsMessageMetadata();
     const { data, error } = await this.client
       .from("messages")
-      .select("id, conversation_id, role, content, created_at")
+      .select(this.messageSelectClause(supportsMetadata))
       .order("created_at", { ascending: true });
 
     if (error) {
       throw new Error(`Failed to list messages: ${error.message}`);
     }
 
-    return ((data || []) as Array<Record<string, string>>).map((item: Record<string, string>) => ({
-      id: item.id,
-      conversationId: item.conversation_id,
-      role: item.role as MemoryRole,
-      content: item.content,
-      createdAt: item.created_at,
-    }));
+    return ((data || []) as Array<Record<string, string | null | undefined>>).map(
+      (item: Record<string, string | null | undefined>) =>
+        this.mapMessageRecord(item, supportsMetadata)
+    );
   }
 
   public async createTask(task: LinaTaskRecord): Promise<LinaTaskRecord> {
@@ -303,5 +316,54 @@ export class SupabaseMemoryStore implements MemoryStore {
     if (error) {
       throw new Error(`Failed to write system log: ${error.message}`);
     }
+  }
+
+  private async supportsMessageMetadata(): Promise<boolean> {
+    if (this.messageMetadataSupport !== undefined) {
+      return this.messageMetadataSupport;
+    }
+
+    const { error } = await this.client
+      .from("messages")
+      .select("id, source")
+      .limit(1);
+
+    this.messageMetadataSupport = !error;
+    return this.messageMetadataSupport;
+  }
+
+  private messageSelectClause(includeMetadata: boolean): string {
+    const base = "id, conversation_id, role, content, created_at";
+    if (!includeMetadata) {
+      return base;
+    }
+
+    return `${base}, source, channel, chat_id, chat_type, user_id, username, first_name, message_type, transport_message_id`;
+  }
+
+  private mapMessageRecord(
+    item: Record<string, string | null | undefined>,
+    includeMetadata: boolean
+  ): ConversationMessage {
+    return {
+      id: item.id,
+      conversationId: item.conversation_id,
+      role: item.role as MemoryRole,
+      content: item.content,
+      createdAt: item.created_at,
+      metadata: includeMetadata
+        ? {
+            source: item.source as ConversationMessageMetadata["source"],
+            channel: item.channel,
+            chatId: item.chat_id,
+            chatType: item.chat_type,
+            userId: item.user_id,
+            username: item.username,
+            firstName: item.first_name,
+            messageType: item.message_type as ConversationMessageMetadata["messageType"],
+            transportMessageId: item.transport_message_id,
+          }
+        : undefined,
+    };
   }
 }

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { MemoryStore } from "./memory-store.interface";
 import {
   ConversationMessage,
+  ConversationMessageMetadata,
   LinaExecutionRecord,
   LinaExecutionUpdate,
   LinaSystemLogRecord,
@@ -47,7 +48,8 @@ export class LocalMemoryStore implements MemoryStore {
   public async appendMessage(
     role: MemoryRole,
     content: string,
-    conversationId?: string
+    conversationId?: string,
+    metadata?: ConversationMessageMetadata
   ): Promise<ConversationMessage> {
     const state = this.load();
     const message: ConversationMessage = {
@@ -56,6 +58,7 @@ export class LocalMemoryStore implements MemoryStore {
       role,
       content,
       createdAt: new Date().toISOString(),
+      metadata,
     };
     state.messages.push(message);
     this.persist(state);

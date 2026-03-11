@@ -1,5 +1,6 @@
 import {
   ConversationMessage,
+  ConversationMessageMetadata,
   LinaExecutionRecord,
   LinaExecutionUpdate,
   LinaSystemLogRecord,
@@ -15,7 +16,8 @@ export interface MemoryStore {
   appendMessage(
     role: MemoryRole,
     content: string,
-    conversationId?: string
+    conversationId?: string,
+    metadata?: ConversationMessageMetadata
   ): Promise<ConversationMessage>;
   listMessages(): Promise<ConversationMessage[]>;
   createTask(task: LinaTaskRecord): Promise<LinaTaskRecord>;

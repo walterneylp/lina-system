@@ -17,9 +17,15 @@ export type TelegramUpdate = {
     message_id: number;
     chat: {
       id: number;
+      type?: string;
+      title?: string;
+      username?: string;
     };
     from?: {
       id: number;
+      is_bot?: boolean;
+      first_name?: string;
+      username?: string;
     };
     text?: string;
     caption?: string;

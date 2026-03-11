@@ -768,6 +768,14 @@ const html = `<!DOCTYPE html>
 
         <article class="panel section">
           <div class="section-head">
+            <h2>Telegram</h2>
+            <p>Resumo por origem quando os metadados de mensagem estiverem disponíveis.</p>
+          </div>
+          <div class="feed" id="telegram-feed"></div>
+        </article>
+
+        <article class="panel section">
+          <div class="section-head">
             <h2>Logs do Sistema</h2>
             <p>Eventos recentes do runtime para depuração e monitoramento.</p>
           </div>
@@ -996,6 +1004,54 @@ const html = `<!DOCTYPE html>
         \`).join("");
       };
 
+      const renderTelegramView = (messages) => {
+        const feed = document.getElementById("telegram-feed");
+        const telegramMessages = (messages || []).filter((message) => message.metadata?.source === "telegram");
+
+        if (!telegramMessages.length) {
+          renderEmpty(feed, "Nenhum metadado de Telegram disponível ainda. Aplique a migration nova para começar a preencher essa visão.");
+          return;
+        }
+
+        const grouped = new Map();
+
+        for (const message of telegramMessages) {
+          const metadata = message.metadata || {};
+          const key = metadata.chatId || metadata.userId || message.id;
+          const current = grouped.get(key) || {
+            chatId: metadata.chatId,
+            chatType: metadata.chatType,
+            username: metadata.username,
+            firstName: metadata.firstName,
+            userId: metadata.userId,
+            count: 0,
+            lastMessageAt: message.createdAt,
+            lastPreview: message.content,
+          };
+
+          current.count += 1;
+          current.lastMessageAt = message.createdAt;
+          current.lastPreview = message.content;
+          grouped.set(key, current);
+        }
+
+        const cards = Array.from(grouped.values())
+          .sort((left, right) => String(right.lastMessageAt).localeCompare(String(left.lastMessageAt)))
+          .slice(0, 12);
+
+        feed.innerHTML = cards.map((item) => \`
+          <article class="feed-item">
+            <div class="feed-meta">
+              <span class="badge neutral">\${escapeHtml(item.chatType || "telegram")}</span>
+              <span>\${formatTime(item.lastMessageAt)}</span>
+            </div>
+            <div class="feed-title">\${escapeHtml(item.firstName || item.username || item.chatId || "origem desconhecida")}</div>
+            <div class="feed-body">chatId: \${escapeHtml(item.chatId)} | userId: \${escapeHtml(item.userId)} | mensagens: \${escapeHtml(item.count)}</div>
+            <div class="feed-body">\${escapeHtml(item.lastPreview)}</div>
+          </article>
+        \`).join("");
+      };
+
       const renderLogs = (logs) => {
         const feed = document.getElementById("logs-feed");
         const filters = getLogFilters();
@@ -1078,6 +1134,7 @@ const html = `<!DOCTYPE html>
         renderTasks(dashboardState.tasks);
         renderExecutions(dashboardState.executions);
         renderMessages(dashboardState.messages);
+        renderTelegramView(dashboardState.messages);
         renderLogs(dashboardState.logs);
       };
 
