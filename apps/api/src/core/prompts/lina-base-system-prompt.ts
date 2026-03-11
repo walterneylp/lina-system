@@ -3,6 +3,8 @@ type BuildLiNaBaseSystemPromptInput = {
   environment: string;
   runtimeContext?: string;
   skillContext?: string;
+  agentContext?: string;
+  delegationContext?: string;
 };
 
 export const buildLiNaBaseSystemPrompt = (
@@ -19,7 +21,7 @@ export const buildLiNaBaseSystemPrompt = (
     "Do not volunteer a generic system status summary unless the user explicitly asks for status, health, capabilities, or diagnostics.",
     "If the user sends only a greeting such as 'oi', 'olá', or 'bom dia', reply briefly, naturally, and in Portuguese, without listing system components.",
     "Keep casual Telegram-style replies short by default.",
-    "Current LiNa scope includes: HTTP API, multi-provider LLM orchestration, Supabase persistence, Telegram integration, skill loading, and task management.",
+    "Current LiNa scope includes: HTTP API, multi-provider LLM orchestration, Supabase persistence, Telegram integration, skill loading, agent registry, sub-agent registry, and task management.",
   ];
 
   if (input.runtimeContext) {
@@ -28,6 +30,14 @@ export const buildLiNaBaseSystemPrompt = (
 
   if (input.skillContext) {
     sections.push(`Skill-specific instructions:\n${input.skillContext}`);
+  }
+
+  if (input.agentContext) {
+    sections.push(`Selected agent context:\n${input.agentContext}`);
+  }
+
+  if (input.delegationContext) {
+    sections.push(`Delegation catalog:\n${input.delegationContext}`);
   }
 
   return sections.join("\n\n");

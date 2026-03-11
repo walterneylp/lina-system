@@ -14,6 +14,8 @@ export type LinaEnv = {
   maxExecutionTimeMs: number;
   maxToolCallsPerTool: number;
   skillsDirectory: string;
+  agentsDirectory: string;
+  subAgentsDirectory: string;
   tempDirectory: string;
   workspaceDirectory: string;
   telegramBotToken?: string;
@@ -82,6 +84,8 @@ export const loadEnv = (): LinaEnv => ({
       maxExecutionTimeMs: parseInteger(readEnvValue(fileEnv, "MAX_EXECUTION_TIME_MS"), 60_000),
       maxToolCallsPerTool: parseInteger(readEnvValue(fileEnv, "MAX_TOOL_CALLS_PER_TOOL"), 3),
       skillsDirectory: readEnvValue(fileEnv, "SKILLS_DIRECTORY") || "./.agents/skills",
+      agentsDirectory: readEnvValue(fileEnv, "AGENTS_DIRECTORY") || "./.agents/agents",
+      subAgentsDirectory: readEnvValue(fileEnv, "SUB_AGENTS_DIRECTORY") || "./.agents/sub-agents",
       tempDirectory: readEnvValue(fileEnv, "TEMP_DIR") || "./tmp",
       workspaceDirectory: readEnvValue(fileEnv, "WORKSPACE_DIR") || "./workspace",
       telegramBotToken: readEnvValue(fileEnv, "TELEGRAM_BOT_TOKEN"),

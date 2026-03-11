@@ -1,3 +1,4 @@
+import { AgentLoader } from "../core/agents/agent-loader";
 import { LinaEnv } from "../config/env";
 import { MemoryManager } from "../core/memory/memory-manager";
 import { LinaOrchestrator } from "../core/orchestrator/orchestrator";
@@ -13,6 +14,8 @@ type TelegramCommandServiceOptions = {
   orchestrator: LinaOrchestrator;
   providerFactory: ProviderFactory;
   skillLoader: SkillLoader;
+  agentLoader: AgentLoader;
+  subAgentLoader: AgentLoader;
   telegramRuntime: TelegramRuntime;
 };
 
@@ -157,6 +160,17 @@ export class TelegramCommandService {
         availableSkills: this.options.skillLoader.load().map((skill) => ({
           name: skill.name,
           description: skill.description,
+          capabilities: skill.capabilities,
+        })),
+        availableAgents: this.options.agentLoader.load().map((agent) => ({
+          name: agent.name,
+          description: agent.description,
+          role: agent.role,
+        })),
+        availableSubAgents: this.options.subAgentLoader.load().map((agent) => ({
+          name: agent.name,
+          description: agent.description,
+          role: agent.role,
         })),
       },
       null,

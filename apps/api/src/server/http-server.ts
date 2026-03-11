@@ -1,5 +1,6 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { LinaEnv } from "../config/env";
+import { AgentLoader } from "../core/agents/agent-loader";
 import { MemoryManager } from "../core/memory/memory-manager";
 import { LinaOrchestrator } from "../core/orchestrator/orchestrator";
 import { ProviderFactory } from "../core/providers/provider-factory";
@@ -12,6 +13,8 @@ type HttpServerDependencies = {
   orchestrator: LinaOrchestrator;
   providerFactory: ProviderFactory;
   skillLoader: SkillLoader;
+  agentLoader: AgentLoader;
+  subAgentLoader: AgentLoader;
   telegramRuntime: TelegramRuntime;
 };
 
@@ -60,6 +63,9 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
             maxIterations: dependencies.env.maxIterations,
             conversationSize: conversation.length,
             tasksCount: tasks.length,
+            agentsCount: dependencies.agentLoader.load().length,
+            subAgentsCount: dependencies.subAgentLoader.load().length,
+            skillsCount: dependencies.skillLoader.load().length,
             persistence,
             providers,
             telegram,
@@ -77,6 +83,30 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
       if (method === "GET" && url === "/skills") {
         response.writeHead(200, { "Content-Type": "application/json" });
         response.end(JSON.stringify(dependencies.skillLoader.load()));
+        return;
+      }
+
+      if (method === "GET" && url === "/agents") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(dependencies.agentLoader.load()));
+        return;
+      }
+
+      if (method === "GET" && url === "/sub-agents") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(dependencies.subAgentLoader.load()));
+        return;
+      }
+
+      if (method === "GET" && url === "/delegation/catalog") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(
+          JSON.stringify({
+            agents: dependencies.agentLoader.load(),
+            subAgents: dependencies.subAgentLoader.load(),
+            skills: dependencies.skillLoader.load(),
+          })
+        );
         return;
       }
 
@@ -109,6 +139,17 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
               availableSkills: dependencies.skillLoader.load().map((skill) => ({
                 name: skill.name,
                 description: skill.description,
+                capabilities: skill.capabilities,
+              })),
+              availableAgents: dependencies.agentLoader.load().map((agent) => ({
+                name: agent.name,
+                description: agent.description,
+                role: agent.role,
+              })),
+              availableSubAgents: dependencies.subAgentLoader.load().map((agent) => ({
+                name: agent.name,
+                description: agent.description,
+                role: agent.role,
               })),
             },
             null,

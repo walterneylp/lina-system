@@ -1,4 +1,5 @@
 import { loadEnv } from "./config/env";
+import { AgentLoader } from "./core/agents/agent-loader";
 import { AgentLoop } from "./core/agent-loop/agent-loop";
 import { MemoryManager } from "./core/memory/memory-manager";
 import { createMemoryStoreWithFallback } from "./core/memory/memory-store.factory";
@@ -20,6 +21,8 @@ import { TelegramRuntime } from "./telegram/telegram-runtime";
 const env = loadEnv();
 const providerFactory = new ProviderFactory();
 const skillLoader = new SkillLoader(env.skillsDirectory);
+const agentLoader = new AgentLoader(env.agentsDirectory, "AGENT.md", "agent");
+const subAgentLoader = new AgentLoader(env.subAgentsDirectory, "SUB_AGENT.md", "sub-agent");
 const telegramRuntime = new TelegramRuntime();
 const agentLoop = new AgentLoop({
   providerFactory,
@@ -37,6 +40,8 @@ export const bootstrapLiNa = async () => {
   const orchestrator = new LinaOrchestrator(
     agentLoop,
     skillLoader,
+    agentLoader,
+    subAgentLoader,
     env.appName,
     env.appEnv
   );
@@ -59,6 +64,8 @@ export const bootstrapLiNa = async () => {
     orchestrator,
     providerFactory,
     skillLoader,
+    agentLoader,
+    subAgentLoader,
     telegramRuntime,
   });
 
@@ -78,6 +85,8 @@ export const bootstrapLiNa = async () => {
       orchestrator,
       providerFactory,
       skillLoader,
+      agentLoader,
+      subAgentLoader,
       telegramRuntime,
     });
     telegramRuntime.setStatus({
