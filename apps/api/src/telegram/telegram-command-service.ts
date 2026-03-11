@@ -7,6 +7,8 @@ import { SkillLoader } from "../core/skills/skill-loader";
 import { TelegramRuntime } from "./telegram-runtime";
 import { TelegramAuthorizedActor } from "./telegram-access-control";
 import { DashboardAuthStore } from "../../../dashboard/src/auth/dashboard-auth-store";
+import { DelegationArtifactFactory } from "../core/delegation/artifact-factory";
+import { DelegationArtifactKind } from "../core/delegation/artifact-factory.types";
 
 type TelegramCommandServiceOptions = {
   env: LinaEnv;
@@ -27,6 +29,7 @@ type ParsedCommand = {
 
 export class TelegramCommandService {
   private readonly dashboardAuthStore: DashboardAuthStore | null;
+  private readonly artifactFactory: DelegationArtifactFactory;
 
   constructor(private readonly options: TelegramCommandServiceOptions) {
     this.dashboardAuthStore =
@@ -36,6 +39,12 @@ export class TelegramCommandService {
             serviceRoleKey: options.env.supabaseServiceRoleKey,
           })
         : null;
+    this.artifactFactory = new DelegationArtifactFactory({
+      agentsDirectory: options.env.agentsDirectory,
+      subAgentsDirectory: options.env.subAgentsDirectory,
+      skillsDirectory: options.env.skillsDirectory,
+      templatesDirectory: "./.agents/templates",
+    });
   }
 
   public async handle(text: string, actor?: TelegramAuthorizedActor | null): Promise<string | null> {
@@ -60,6 +69,9 @@ export class TelegramCommandService {
         return this.handleRun(command.rawArgs, actor);
       case "dashboard":
         return this.handleDashboard(command.args, actor);
+      case "factory":
+      case "fabrica":
+        return this.handleFactory(command.rawArgs, actor);
       default:
         return "Comando nao reconhecido. Use /help para ver os comandos disponiveis.";
     }
@@ -231,6 +243,10 @@ export class TelegramCommandService {
 
     if (actor?.permissions.useTelegramAdmin) {
       lines.push(
+        "/factory templates",
+        "/factory agent <nome> | <descricao>",
+        "/factory sub-agent <nome> | <descricao>",
+        "/factory skill <nome> | <descricao>",
         "/dashboard bootstrap status",
         "/dashboard bootstrap on",
         "/dashboard bootstrap off",
@@ -243,6 +259,93 @@ export class TelegramCommandService {
     }
 
     return lines.join("\n");
+  }
+
+  private async handleFactory(
+    rawArgs: string,
+    actor?: TelegramAuthorizedActor | null
+  ): Promise<string> {
+    if (!actor?.permissions.useTelegramAdmin) {
+      return "Seu papel atual nao permite criar agents, sub-agents ou skills pelo Telegram.";
+    }
+
+    const normalized = rawArgs.trim();
+
+    if (!normalized) {
+      return [
+        "Use um destes formatos:",
+        "/factory templates",
+        "/factory agent <nome> | <descricao>",
+        "/factory sub-agent <nome> | <descricao>",
+        "/factory skill <nome> | <descricao>",
+        "Adicione --overwrite para substituir um artifact existente.",
+      ].join("\n");
+    }
+
+    if (normalized.toLowerCase() === "templates") {
+      const templates = this.artifactFactory.getTemplateCatalog();
+      return [
+        "Templates oficiais da LiNa",
+        ...templates.map((item) => `- ${item.kind}: ${item.path}`),
+      ].join("\n");
+    }
+
+    const overwrite = normalized.includes("--overwrite");
+    const sanitized = normalized.replace(/\s--overwrite\b/g, "").trim();
+    const firstSpaceIndex = sanitized.indexOf(" ");
+
+    if (firstSpaceIndex < 0) {
+      return "Use /factory agent|sub-agent|skill <nome> | <descricao>";
+    }
+
+    const kindToken = sanitized.slice(0, firstSpaceIndex).trim().toLowerCase();
+    const remainder = sanitized.slice(firstSpaceIndex + 1).trim();
+    const [rawName, rawDescription] = remainder.split("|").map((item) => item.trim());
+    const kind = this.parseArtifactKind(kindToken);
+
+    if (!kind || !rawName || !rawDescription) {
+      return "Use /factory agent|sub-agent|skill <nome> | <descricao>";
+    }
+
+    const artifact = this.artifactFactory.create({
+      kind,
+      name: rawName,
+      description: rawDescription,
+      overwrite,
+      role: kind === "skill" ? undefined : "specialist",
+      delegationScope:
+        kind === "agent" ? "orchestrator-only" : kind === "sub-agent" ? "agent-only" : undefined,
+      allowedSkills: kind === "skill" ? undefined : ["agent-skill-factory"],
+      capabilities: kind === "skill" ? ["analysis"] : undefined,
+    });
+
+    await this.options.memoryManager.log(
+      "info",
+      `[telegram-admin] ${actor.username} ${artifact.overwritten ? "updated" : "created"} ${artifact.kind} ${artifact.name}`
+    );
+
+    return [
+      `Artifact ${artifact.overwritten ? "atualizado" : "criado"} com sucesso`,
+      `- tipo: ${artifact.kind}`,
+      `- nome: ${artifact.name}`,
+      `- manifest: ${artifact.manifestPath}`,
+    ].join("\n");
+  }
+
+  private parseArtifactKind(value: string): DelegationArtifactKind | null {
+    if (value === "agent") {
+      return "agent";
+    }
+
+    if (value === "sub-agent" || value === "subagent" || value === "sub_agente") {
+      return "sub-agent";
+    }
+
+    if (value === "skill") {
+      return "skill";
+    }
+
+    return null;
   }
 
   private async handleDashboardBootstrap(value?: string, actor?: TelegramAuthorizedActor | null): Promise<string> {
