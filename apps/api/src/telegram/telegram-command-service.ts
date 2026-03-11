@@ -175,10 +175,48 @@ export class TelegramCommandService {
   private async handleDashboard(args: string[]): Promise<string> {
     const [scope, value] = args.map((item) => item.toLowerCase());
 
-    if (scope !== "bootstrap") {
-      return "Use /dashboard bootstrap status|on|off";
+    if (scope === "bootstrap") {
+      return this.handleDashboardBootstrap(value);
     }
 
+    if (!this.dashboardAuthStore) {
+      return "A configuracao do dashboard no banco nao esta disponivel neste ambiente.";
+    }
+
+    if (scope === "users") {
+      return this.handleDashboardUsers();
+    }
+
+    if (scope === "user") {
+      return this.handleDashboardUser(args.slice(1));
+    }
+
+    if (scope === "password") {
+      return this.handleDashboardPassword(args.slice(1));
+    }
+
+    return "Use /dashboard bootstrap status|on|off, /dashboard users, /dashboard user status|enable|disable <usuario> ou /dashboard password <usuario> <novaSenha>";
+  }
+
+  private handleHelp(): string {
+    return [
+      "Comandos Telegram da LiNa",
+      "/health",
+      "/status",
+      "/tasks [limite]",
+      "/run <prompt>",
+      "/dashboard bootstrap status",
+      "/dashboard bootstrap on",
+      "/dashboard bootstrap off",
+      "/dashboard users",
+      "/dashboard user status <usuario>",
+      "/dashboard user enable <usuario>",
+      "/dashboard user disable <usuario>",
+      "/dashboard password <usuario> <novaSenha>",
+    ].join("\n");
+  }
+
+  private async handleDashboardBootstrap(value?: string): Promise<string> {
     if (!this.dashboardAuthStore) {
       return "A configuracao do dashboard no banco nao esta disponivel neste ambiente.";
     }
@@ -207,16 +245,75 @@ export class TelegramCommandService {
     ].join("\n");
   }
 
-  private handleHelp(): string {
+  private async handleDashboardUsers(): Promise<string> {
+    const users = await this.dashboardAuthStore!.listUsers();
+
+    if (!users.length) {
+      return "Nenhum usuário do dashboard foi cadastrado ainda.";
+    }
+
     return [
-      "Comandos Telegram da LiNa",
-      "/health",
-      "/status",
-      "/tasks [limite]",
-      "/run <prompt>",
-      "/dashboard bootstrap status",
-      "/dashboard bootstrap on",
-      "/dashboard bootstrap off",
+      `Usuários do dashboard (${users.length})`,
+      ...users.map(
+        (user, index) =>
+          `${index + 1}. ${user.username} · ${user.role} · ${user.isActive ? "ativo" : "inativo"}`
+      ),
+    ].join("\n");
+  }
+
+  private async handleDashboardUser(args: string[]): Promise<string> {
+    const [action, username] = args;
+
+    if (!action || !username) {
+      return "Use /dashboard user status|enable|disable <usuario>";
+    }
+
+    const users = await this.dashboardAuthStore!.listUsers();
+    const user = users.find((item) => item.username.toLowerCase() === username.toLowerCase());
+
+    if (!user) {
+      return "Usuário não encontrado.";
+    }
+
+    if (action === "status") {
+      return [
+        `Usuário ${user.username}`,
+        `- role: ${user.role}`,
+        `- ativo: ${user.isActive ? "sim" : "nao"}`,
+        `- criado em: ${user.createdAt}`,
+        `- ultimo login: ${user.lastLoginAt || "nunca"}`,
+      ].join("\n");
+    }
+
+    if (action === "enable" || action === "disable") {
+      const updated = await this.dashboardAuthStore!.setUserActive(
+        user.username,
+        action === "enable"
+      );
+      return [
+        "Usuário atualizado",
+        `- usuario: ${updated.username}`,
+        `- ativo: ${updated.isActive ? "sim" : "nao"}`,
+      ].join("\n");
+    }
+
+    return "Use /dashboard user status|enable|disable <usuario>";
+  }
+
+  private async handleDashboardPassword(args: string[]): Promise<string> {
+    const [username, ...passwordParts] = args;
+    const newPassword = passwordParts.join(" ").trim();
+
+    if (!username || !newPassword) {
+      return "Use /dashboard password <usuario> <novaSenha>";
+    }
+
+    const updated = await this.dashboardAuthStore!.setUserPassword(username, newPassword);
+
+    return [
+      "Senha atualizada",
+      `- usuario: ${updated.username}`,
+      "- observacao: a nova senha foi aplicada. Trate essa conversa como sensível.",
     ].join("\n");
   }
 }

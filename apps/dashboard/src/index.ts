@@ -50,6 +50,7 @@ const dashboardAuthMode = dashboardAuthStore
   : dashboardAccessToken
     ? "token"
     : "open";
+const dashboardVersion = JSON.parse(readFileSync("package.json", "utf8")).version || "0.1.0";
 
 const sendJson = (response: ServerResponse, status: number, payload: unknown) => {
   response.writeHead(status, { "Content-Type": "application/json" });
@@ -382,11 +383,55 @@ const html = `<!DOCTYPE html>
       }
 
       .shell {
-        width: min(1440px, calc(100% - 32px));
-        margin: 20px auto 40px;
+        width: min(1500px, calc(100% - 24px));
+        margin: 12px auto;
+        min-height: calc(100vh - 24px);
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 18px;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 12px;
+        align-self: start;
+        min-height: calc(100vh - 24px);
+        padding: 22px 18px;
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+        gap: 18px;
+      }
+
+      .sidebar-brand h1 {
+        margin: 14px 0 8px;
+        max-width: none;
+        font-size: clamp(2rem, 2.6vw, 3rem);
+      }
+
+      .sidebar-copy {
+        color: var(--muted);
+        font-size: 0.94rem;
+        line-height: 1.6;
+      }
+
+      .sidebar-nav {
+        display: grid;
+        gap: 10px;
+      }
+
+      .sidebar-footer {
+        display: grid;
+        gap: 10px;
+      }
+
+      .main-shell {
+        min-width: 0;
       }
 
       .topbar {
+        position: sticky;
+        top: 12px;
+        z-index: 10;
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 16px;
@@ -403,11 +448,24 @@ const html = `<!DOCTYPE html>
         flex-wrap: wrap;
       }
 
-      .hero {
+      .topbar-title {
         display: grid;
-        grid-template-columns: 1.15fr 0.85fr;
-        gap: 18px;
-        margin-bottom: 18px;
+        gap: 4px;
+      }
+
+      .topbar-title strong {
+        font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
+        letter-spacing: -0.03em;
+        font-size: 1.05rem;
+      }
+
+      .topbar-title span {
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+
+      .workspace {
+        min-width: 0;
       }
 
       .panel {
@@ -416,6 +474,12 @@ const html = `<!DOCTYPE html>
         border-radius: var(--radius);
         box-shadow: var(--shadow);
         backdrop-filter: blur(16px);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 18px;
       }
 
       .hero-main {
@@ -576,22 +640,22 @@ const html = `<!DOCTYPE html>
         color: var(--muted);
       }
 
-      .view-nav {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-
       .view-tab {
         appearance: none;
-        min-height: 42px;
-        padding: 0 14px;
-        border-radius: 999px;
+        width: 100%;
+        min-height: 54px;
+        padding: 0 16px;
+        border-radius: 18px;
         border: 1px solid rgba(255,255,255,0.08);
         background: rgba(255,255,255,0.04);
         color: var(--muted);
         cursor: pointer;
         font-weight: 700;
+        display: grid;
+        grid-template-columns: 40px minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+        text-align: left;
       }
 
       .view-tab.active {
@@ -600,8 +664,42 @@ const html = `<!DOCTYPE html>
         border-color: transparent;
       }
 
-      .workspace.is-overview {
-        display: none;
+      .nav-icon {
+        width: 40px;
+        height: 40px;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.08);
+      }
+
+      .view-tab.active .nav-icon {
+        background: rgba(17, 17, 17, 0.12);
+      }
+
+      .nav-icon svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .nav-copy {
+        display: grid;
+        gap: 2px;
+      }
+
+      .nav-copy strong {
+        font-size: 0.96rem;
+      }
+
+      .nav-copy span {
+        font-size: 0.78rem;
+        color: inherit;
+        opacity: 0.72;
       }
 
       [data-view-panel] {
@@ -657,13 +755,6 @@ const html = `<!DOCTYPE html>
         justify-content: space-between;
         gap: 12px;
         margin-bottom: 18px;
-        flex-wrap: wrap;
-      }
-
-      .subtools-actions {
-        display: flex;
-        align-items: center;
-        gap: 12px;
         flex-wrap: wrap;
       }
 
@@ -755,7 +846,7 @@ const html = `<!DOCTYPE html>
       }
 
       .section {
-        padding: 22px;
+        padding: 24px;
       }
 
       .page-panel {
@@ -841,6 +932,18 @@ const html = `<!DOCTYPE html>
         font-size: 0.88rem;
       }
 
+      .version-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 42px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.04);
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+
       .theme-toggle {
         min-width: 126px;
         background: rgba(255,255,255,0.05) !important;
@@ -855,6 +958,18 @@ const html = `<!DOCTYPE html>
         color: var(--muted);
       }
 
+      @media (max-width: 1180px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          position: static;
+          min-height: auto;
+          grid-template-rows: auto auto auto auto;
+        }
+      }
+
       @media (max-width: 1100px) {
         .hero {
           grid-template-columns: 1fr;
@@ -867,10 +982,12 @@ const html = `<!DOCTYPE html>
 
       @media (max-width: 720px) {
         .shell {
-          width: min(100% - 20px, 1440px);
-          margin-top: 10px;
+          width: min(100% - 16px, 1500px);
+          margin: 8px auto;
         }
 
+        .sidebar,
+        .topbar,
         .hero-main,
         .hero-side,
         .section {
@@ -883,15 +1000,18 @@ const html = `<!DOCTYPE html>
         }
 
         .topbar,
-        .toolbar,
         .subtools {
-          flex-direction: column;
           grid-template-columns: 1fr;
           align-items: stretch;
         }
 
-        .view-nav {
-          flex-direction: column;
+        .topbar-left,
+        .topbar-right {
+          align-items: stretch;
+        }
+
+        .view-tab {
+          min-height: 50px;
         }
 
         .task-form {
@@ -906,100 +1026,137 @@ const html = `<!DOCTYPE html>
   </head>
   <body>
     <main class="shell">
-      <header class="panel topbar">
-        <div class="topbar-left">
-          <nav class="view-nav" id="view-nav">
-            <button class="view-tab active" data-view="overview" type="button">Visão Geral</button>
-            <button class="view-tab" data-view="infra" type="button">Infra</button>
-            <button class="view-tab" data-view="composer" type="button">Composer</button>
-            <button class="view-tab" data-view="tasks" type="button">Tarefas</button>
-            <button class="view-tab" data-view="messages" type="button">Mensagens</button>
-            <button class="view-tab" data-view="telegram" type="button">Telegram</button>
-            <button class="view-tab" data-view="executions" type="button">Execuções</button>
-            <button class="view-tab" data-view="logs" type="button">Logs</button>
-            <button class="view-tab" data-view="settings" type="button">Configurações</button>
-          </nav>
-        </div>
-        <div class="topbar-right">
-          <div class="user-pill" id="current-user-pill">Sem sessão identificada</div>
-          <small id="last-updated">Aguardando primeira carga...</small>
-          <button id="theme-toggle-button" class="theme-toggle" type="button">Tema claro</button>
-          <button id="refresh-button" type="button">Atualizar Agora</button>
-          <button id="logout-button" type="button">Sair</button>
-        </div>
-      </header>
-
-      <section class="hero">
-        <article class="panel hero-main">
+      <aside class="panel sidebar">
+        <div class="sidebar-brand">
           <div class="eyebrow"><span class="pulse"></span> LiNa Control Room</div>
-          <h1>Operational visibility for the live agent runtime.</h1>
-          <p class="hero-copy">
-            Dashboard de observabilidade para acompanhar saúde do sistema, providers,
-            Telegram, Supabase, mensagens recentes e atividade operacional da LiNa.
-          </p>
-          <div class="hero-grid">
-            <div class="metric">
-              <div class="metric-label">Status Geral</div>
-              <div class="metric-value" id="metric-health">...</div>
-              <div class="metric-note" id="metric-persistence">Persistência n/a</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Mensagens</div>
-              <div class="metric-value" id="metric-messages">0</div>
-              <div class="metric-note" id="metric-telegram-messages">Telegram 0</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Tarefas</div>
-              <div class="metric-value" id="metric-tasks">0</div>
-              <div class="metric-note" id="metric-pending-tasks">Pendentes 0</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Providers Ativos</div>
-              <div class="metric-value" id="metric-providers">0</div>
-              <div class="metric-note" id="metric-default-provider">Default n/a</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Chats Telegram</div>
-              <div class="metric-value" id="metric-telegram-chats">0</div>
-              <div class="metric-note" id="metric-telegram-users">Usuários 0</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Execuções</div>
-              <div class="metric-value" id="metric-executions">0</div>
-              <div class="metric-note" id="metric-execution-success">Sucesso n/a</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Falhas</div>
-              <div class="metric-value" id="metric-failures">0</div>
-              <div class="metric-note" id="metric-running-tasks">Running 0</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Atividade</div>
-              <div class="metric-value" id="metric-last-activity">n/a</div>
-              <div class="metric-note" id="metric-last-source">Sem origem recente</div>
-            </div>
-          </div>
-        </article>
-        <aside class="panel hero-side">
-          <div class="section-head">
-            <h2>Runtime</h2>
-            <p>Estado do backend, persistência e Telegram em tempo real.</p>
-          </div>
-          <div class="status-stack" id="status-stack"></div>
-        </aside>
-      </section>
-
-      <section class="workspace is-overview" id="workspace">
-        <div class="subtools">
-          <div>
-            <div class="eyebrow">Workspace</div>
-            <p class="hero-copy" style="margin:10px 0 0; max-width:72ch;">
-              As seções abaixo ocupam a área operacional principal. A visão geral continua acima, e cada opção do menu abre sua própria página nesta faixa inferior.
-            </p>
-          </div>
+          <h1>LiNa Ops</h1>
+          <p class="sidebar-copy">Painel operacional com navegação persistente, sessão protegida e controle central da execução da LiNa.</p>
         </div>
+        <nav class="sidebar-nav" id="view-nav">
+          <button class="view-tab active" data-view="overview" type="button">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10.5V20h14v-9.5"/><path d="M9 20v-5h6v5"/></svg></span>
+            <span class="nav-copy"><strong>Visão Geral</strong><span>Resumo executivo e saúde da operação</span></span>
+          </button>
+          <button class="view-tab" data-view="infra" type="button">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M8 7h.01M8 17h.01"/></svg></span>
+            <span class="nav-copy"><strong>Infra</strong><span>Providers, persistência e runtime</span></span>
+          </button>
+          <button class="view-tab" data-view="composer" type="button">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 16V4l10 6-10 6Z"/></svg></span>
+            <span class="nav-copy"><strong>Composer</strong><span>Execução manual do orquestrador</span></span>
+          </button>
+          <button class="view-tab" data-view="tasks" type="button">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="m4 6 1.5 1.5L7.5 5"/><path d="m4 12 1.5 1.5L7.5 11"/><path d="m4 18 1.5 1.5L7.5 17"/></svg></span>
+            <span class="nav-copy"><strong>Tarefas</strong><span>Criação, filtro e atualização de status</span></span>
+          </button>
+          <button class="view-tab" data-view="messages" type="button">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 6h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 3v-3H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"/></svg></span>
+            <span class="nav-copy"><strong>Mensagens</strong><span>Histórico operacional persistido</span></span>
+          </button>
+          <button class="view-tab" data-view="telegram" type="button">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="m21 4-8.5 16-3.3-6.2L3 11l18-7Z"/><path d="m9.2 13.8 4.3-4.3"/></svg></span>
+            <span class="nav-copy"><strong>Telegram</strong><span>Chats, origem e atividade do bot</span></span>
+          </button>
+          <button class="view-tab" data-view="executions" type="button">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 19V9"/><path d="M12 19V5"/><path d="M19 19v-7"/></svg></span>
+            <span class="nav-copy"><strong>Execuções</strong><span>Timeline do orquestrador e providers</span></span>
+          </button>
+          <button class="view-tab" data-view="logs" type="button">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 4h10l3 3v13H4V4h3Z"/><path d="M8 11h8"/><path d="M8 15h8"/></svg></span>
+            <span class="nav-copy"><strong>Logs</strong><span>Eventos recentes para depuração</span></span>
+          </button>
+          <button class="view-tab" data-view="settings" type="button">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5A3.5 3.5 0 1 0 12 8.5Z"/><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 0 1 0 2.8l-.1.1a2 2 0 0 1-2.8 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 0 1-2.8 0l-.1-.1a2 2 0 0 1 0-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 0 1 0-2.8l.1-.1a2 2 0 0 1 2.8 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 0 1 2.8 0l.1.1a2 2 0 0 1 0 2.8l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-.2a1 1 0 0 0-.9.6Z"/></svg></span>
+            <span class="nav-copy"><strong>Configurações</strong><span>Auth, bootstrap e ajustes do painel</span></span>
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="version-pill">versão ${dashboardVersion}</div>
+        </div>
+      </aside>
 
-        <section class="page-stack">
+      <section class="main-shell">
+        <header class="panel topbar">
+          <div class="topbar-left">
+            <div class="topbar-title">
+              <strong>Centro Operacional</strong>
+              <span>Conteúdo principal do módulo selecionado no menu lateral</span>
+            </div>
+          </div>
+          <div class="topbar-right">
+            <div class="user-pill" id="current-user-pill">Sem sessão identificada</div>
+            <small id="last-updated">Aguardando primeira carga...</small>
+            <div class="version-pill">v${dashboardVersion}</div>
+            <button id="theme-toggle-button" class="theme-toggle" type="button">Tema claro</button>
+            <button id="refresh-button" type="button">Atualizar Agora</button>
+            <button id="logout-button" type="button">Sair</button>
+          </div>
+        </header>
+
+        <section class="workspace" id="workspace">
+          <section class="page-stack">
+        <article class="page-panel" data-view-panel="overview">
+          <section class="hero">
+            <article class="panel hero-main">
+              <div class="eyebrow"><span class="pulse"></span> Visão Geral</div>
+              <h1>Leitura rápida da operação ativa da LiNa.</h1>
+              <p class="hero-copy">
+                A entrada padrão do painel concentra sinais de saúde, volume operacional,
+                providers ativos, tráfego do Telegram, tarefas e atividade recente.
+              </p>
+              <div class="hero-grid">
+                <div class="metric">
+                  <div class="metric-label">Status Geral</div>
+                  <div class="metric-value" id="metric-health">...</div>
+                  <div class="metric-note" id="metric-persistence">Persistência n/a</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Mensagens</div>
+                  <div class="metric-value" id="metric-messages">0</div>
+                  <div class="metric-note" id="metric-telegram-messages">Telegram 0</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Tarefas</div>
+                  <div class="metric-value" id="metric-tasks">0</div>
+                  <div class="metric-note" id="metric-pending-tasks">Pendentes 0</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Providers Ativos</div>
+                  <div class="metric-value" id="metric-providers">0</div>
+                  <div class="metric-note" id="metric-default-provider">Default n/a</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Chats Telegram</div>
+                  <div class="metric-value" id="metric-telegram-chats">0</div>
+                  <div class="metric-note" id="metric-telegram-users">Usuários 0</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Execuções</div>
+                  <div class="metric-value" id="metric-executions">0</div>
+                  <div class="metric-note" id="metric-execution-success">Sucesso n/a</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Falhas</div>
+                  <div class="metric-value" id="metric-failures">0</div>
+                  <div class="metric-note" id="metric-running-tasks">Running 0</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">Atividade</div>
+                  <div class="metric-value" id="metric-last-activity">n/a</div>
+                  <div class="metric-note" id="metric-last-source">Sem origem recente</div>
+                </div>
+              </div>
+            </article>
+            <aside class="panel hero-side">
+              <div class="section-head">
+                <h2>Runtime</h2>
+                <p>Estado do backend, persistência e Telegram em tempo real.</p>
+              </div>
+              <div class="status-stack" id="status-stack"></div>
+            </aside>
+          </section>
+        </article>
+
         <article class="panel section page-panel" data-view-panel="composer">
           <div class="section-head">
             <h2>Composer</h2>
@@ -1165,6 +1322,7 @@ const html = `<!DOCTYPE html>
           </div>
           <div class="feed" id="settings-feed"></div>
         </article>
+          </section>
         </section>
       </section>
     </main>
@@ -1274,21 +1432,21 @@ const html = `<!DOCTYPE html>
 
       const renderProviders = (providers) => {
         const grid = document.getElementById("providers-grid");
-        const entries = Object.entries(providers || {});
+        const entries = Array.isArray(providers) ? providers : [];
 
         if (!entries.length) {
           renderEmpty(grid, "Nenhum provider disponível.");
           return;
         }
 
-        grid.innerHTML = entries.map(([name, provider]) => {
-          const state = provider?.configured ? "configured" : "not-configured";
+        grid.innerHTML = entries.map((provider) => {
+          const state = provider?.enabled ? "configured" : "not-configured";
           const model = provider?.model || provider?.details || "sem modelo";
           return \`
             <article class="provider-card">
               <div class="feed-meta">
-                <strong>\${escapeHtml(name)}</strong>
-                <span class="badge \${badgeClass(state)}">\${provider?.configured ? "ativo" : "off"}</span>
+                <strong>\${escapeHtml(provider?.name || "provider")}</strong>
+                <span class="badge \${badgeClass(state)}">\${provider?.enabled ? "ativo" : "off"}</span>
               </div>
               <h3>\${escapeHtml(model)}</h3>
               <p>\${escapeHtml(provider?.details || "Provider carregado sem detalhe adicional.")}</p>
@@ -1329,7 +1487,7 @@ const html = `<!DOCTYPE html>
         const runningTasks = (tasks || []).filter((task) => task.status === "running").length;
         const failedExecutions = (executions || []).filter((execution) => execution.status === "failed").length;
         const completedExecutions = (executions || []).filter((execution) => execution.status === "completed").length;
-        const activeProviders = Object.values(providers || {}).filter((item) => item?.configured).length;
+        const activeProviders = (Array.isArray(providers) ? providers : []).filter((item) => item?.enabled).length;
         const lastMessage = [...(messages || [])]
           .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")))[0];
         const executionSuccessRate = executions?.length
@@ -1629,11 +1787,9 @@ const html = `<!DOCTYPE html>
 
       const applyViewState = () => {
         const activeView = dashboardState.activeView || "overview";
-        const workspace = document.getElementById("workspace");
         const tabs = document.querySelectorAll(".view-tab");
         const panels = document.querySelectorAll("[data-view-panel]");
 
-        workspace.classList.toggle("is-overview", activeView === "overview");
         tabs.forEach((tab) => {
           tab.classList.toggle("active", tab.dataset.view === activeView);
         });

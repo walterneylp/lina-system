@@ -192,6 +192,56 @@ export class DashboardAuthStore {
     }
   }
 
+  public async setUserActive(username: string, isActive: boolean): Promise<DashboardAuthUser> {
+    const userRecord = await this.getUserByUsername(username);
+
+    if (!userRecord) {
+      throw new Error("Usuário não encontrado.");
+    }
+
+    const { data, error } = await this.client
+      .from("dashboard_users")
+      .update({
+        is_active: isActive,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", String(userRecord.id || ""))
+      .select("id, username, role, is_active, created_at, updated_at, last_login_at")
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Falha ao atualizar o usuário: ${error?.message || "erro desconhecido"}`);
+    }
+
+    return this.mapUser(data as DashboardUserRecord);
+  }
+
+  public async setUserPassword(username: string, password: string): Promise<DashboardAuthUser> {
+    this.validateCredentials(username, password);
+
+    const userRecord = await this.getUserByUsername(username);
+
+    if (!userRecord) {
+      throw new Error("Usuário não encontrado.");
+    }
+
+    const { data, error } = await this.client
+      .from("dashboard_users")
+      .update({
+        password_hash: this.hashPassword(password),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", String(userRecord.id || ""))
+      .select("id, username, role, is_active, created_at, updated_at, last_login_at")
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Falha ao atualizar a senha do usuário: ${error?.message || "erro desconhecido"}`);
+    }
+
+    return this.mapUser(data as DashboardUserRecord);
+  }
+
   private async createSession(user: DashboardAuthUser): Promise<DashboardSession> {
     const token = randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
