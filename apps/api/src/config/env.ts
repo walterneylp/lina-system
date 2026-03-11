@@ -19,6 +19,7 @@ export type LinaEnv = {
   telegramBotToken?: string;
   telegramAllowedUserIds: string[];
   telegramPollingInterval: number;
+  groqTranscriptionModel: string;
 };
 
 const parseInteger = (rawValue: string | undefined, fallback: number): number => {
@@ -89,6 +90,8 @@ export const loadEnv = (): LinaEnv => ({
         .map((value) => value.trim())
         .filter(Boolean),
       telegramPollingInterval: parseInteger(readEnvValue(fileEnv, "TELEGRAM_POLLING_INTERVAL"), 1000),
+      groqTranscriptionModel:
+        readEnvValue(fileEnv, "GROQ_TRANSCRIPTION_MODEL") || "whisper-large-v3-turbo",
     };
   })(),
 });

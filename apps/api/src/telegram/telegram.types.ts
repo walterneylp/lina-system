@@ -22,7 +22,30 @@ export type TelegramUpdate = {
       id: number;
     };
     text?: string;
+    caption?: string;
+    voice?: {
+      file_id: string;
+      mime_type?: string;
+      file_size?: number;
+    };
+    audio?: {
+      file_id: string;
+      mime_type?: string;
+      file_name?: string;
+      file_size?: number;
+    };
   };
+};
+
+export type TelegramFile = {
+  file_id: string;
+  file_path?: string;
+  file_size?: number;
+};
+
+export type TelegramDownloadedFile = {
+  filePath: string;
+  content: Buffer;
 };
 
 export type TelegramBotIdentity = {

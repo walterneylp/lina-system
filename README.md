@@ -11,6 +11,7 @@ This repository already includes:
 - persistence abstraction with local fallback and Supabase-ready store
 - skill loading from `./.agents/skills`
 - Telegram polling integration using the Bot API directly
+- Telegram voice/audio ingestion with Groq transcription
 - canonical architecture documents under `docs/architecture`
 
 ## Project structure
@@ -75,6 +76,14 @@ curl -sS http://localhost:3000/orchestrator/run \
 ## Telegram mode
 
 If `TELEGRAM_BOT_TOKEN` is configured, LiNa starts polling automatically and handles text messages from allowed user IDs.
+
+Current Telegram support:
+
+- text messages
+- voice notes
+- audio files
+
+Audio messages are downloaded from Telegram, transcribed with Groq STT, and then routed through the same orchestrator pipeline used for text.
 
 ## Supabase mode
 

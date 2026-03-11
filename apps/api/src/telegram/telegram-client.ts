@@ -1,5 +1,7 @@
 import {
   TelegramBotIdentity,
+  TelegramDownloadedFile,
+  TelegramFile,
   TelegramOutboundMessage,
   TelegramUpdate,
 } from "./telegram.types";
@@ -36,6 +38,34 @@ export class TelegramClient {
     }
 
     return payload.result;
+  }
+
+  public async getFile(fileId: string): Promise<TelegramFile> {
+    const response = await fetch(`${this.baseUrl}/getFile?file_id=${encodeURIComponent(fileId)}`);
+    const payload = (await response.json()) as { ok: boolean; result?: TelegramFile };
+
+    if (!payload.ok || !payload.result) {
+      throw new Error(`Telegram getFile failed for file_id=${fileId}`);
+    }
+
+    return payload.result;
+  }
+
+  public async downloadFile(filePath: string): Promise<TelegramDownloadedFile> {
+    const response = await fetch(
+      `https://api.telegram.org/file/${this.baseUrl.replace("https://api.telegram.org/", "")}/${filePath}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Telegram file download failed: ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+
+    return {
+      filePath,
+      content: Buffer.from(arrayBuffer),
+    };
   }
 
   public async sendChatAction(chatId: string, action: "typing" | "record_voice"): Promise<void> {

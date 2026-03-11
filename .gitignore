@@ -5,6 +5,7 @@ dist/
 task_plan.md
 findings.md
 progress.md
+session.md
 tmp/memory/
 logs/*.log
 workspace/*

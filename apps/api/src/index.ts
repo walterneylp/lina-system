@@ -7,6 +7,7 @@ import { ProviderFactory } from "./core/providers/provider-factory";
 import { SkillLoader } from "./core/skills/skill-loader";
 import { startHttpServer } from "./server/http-server";
 import { TelegramClient } from "./telegram/telegram-client";
+import { GroqAudioTranscriber } from "./telegram/groq-audio-transcriber";
 import { TelegramInputHandler } from "./telegram/telegram-input-handler";
 import { TelegramOutputHandler } from "./telegram/telegram-output-handler";
 import { TelegramPollingRunner } from "./telegram/telegram-polling-runner";
@@ -56,6 +57,10 @@ export const bootstrapLiNa = async () => {
 
   if (env.telegramBotToken) {
     const telegramClient = new TelegramClient({ token: env.telegramBotToken });
+    const audioTranscriber = new GroqAudioTranscriber({
+      apiKey: process.env.GROQ_API_KEYS?.split(",").map((value) => value.trim()).filter(Boolean)[0],
+      model: env.groqTranscriptionModel,
+    });
     telegramRuntime.setStatus({
       configured: true,
       authenticated: false,
@@ -69,6 +74,7 @@ export const bootstrapLiNa = async () => {
       memoryManager,
       client: telegramClient,
       outputHandler,
+      audioTranscriber,
     });
 
     telegramRunner = new TelegramPollingRunner({
