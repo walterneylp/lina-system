@@ -1,6 +1,8 @@
 import { MemoryStore } from "./memory-store.interface";
 import {
   ConversationMessage,
+  LinaExecutionRecord,
+  LinaExecutionUpdate,
   LinaSystemLogRecord,
   LinaTaskRecord,
   LinaTaskUpdate,
@@ -46,6 +48,18 @@ export class MemoryManager {
 
   public async updateTask(id: string, updates: LinaTaskUpdate): Promise<LinaTaskRecord> {
     return this.store.updateTask(id, updates);
+  }
+
+  public async createExecution(execution: LinaExecutionRecord): Promise<LinaExecutionRecord> {
+    return this.store.createExecution(execution);
+  }
+
+  public async listExecutions(limit?: number): Promise<LinaExecutionRecord[]> {
+    return this.store.listExecutions(limit);
+  }
+
+  public async updateExecution(id: string, updates: LinaExecutionUpdate): Promise<LinaExecutionRecord> {
+    return this.store.updateExecution(id, updates);
   }
 
   public async listLogs(limit?: number): Promise<LinaSystemLogRecord[]> {

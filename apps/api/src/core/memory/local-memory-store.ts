@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { MemoryStore } from "./memory-store.interface";
 import {
   ConversationMessage,
+  LinaExecutionRecord,
+  LinaExecutionUpdate,
   LinaSystemLogRecord,
   LinaTaskRecord,
   LinaTaskUpdate,
@@ -14,6 +16,7 @@ import {
 type LocalMemoryState = {
   messages: ConversationMessage[];
   tasks: LinaTaskRecord[];
+  executions: LinaExecutionRecord[];
   systemLogs: Array<{
     id: string;
     level: string;
@@ -103,6 +106,47 @@ export class LocalMemoryStore implements MemoryStore {
     return updatedTask;
   }
 
+  public async createExecution(execution: LinaExecutionRecord): Promise<LinaExecutionRecord> {
+    const state = this.load();
+    const createdExecution: LinaExecutionRecord = {
+      id: randomUUID(),
+      taskId: execution.taskId || null,
+      provider: execution.provider || null,
+      status: execution.status,
+      resultSummary: execution.resultSummary || null,
+      createdAt: new Date().toISOString(),
+    };
+    state.executions.push(createdExecution);
+    this.persist(state);
+    return createdExecution;
+  }
+
+  public async listExecutions(limit = 50): Promise<LinaExecutionRecord[]> {
+    return this.load().executions.slice(-limit).reverse();
+  }
+
+  public async updateExecution(id: string, updates: LinaExecutionUpdate): Promise<LinaExecutionRecord> {
+    const state = this.load();
+    const executionIndex = state.executions.findIndex((execution) => execution.id === id);
+
+    if (executionIndex < 0) {
+      throw new Error(`Execution not found: ${id}`);
+    }
+
+    const currentExecution = state.executions[executionIndex];
+    const updatedExecution: LinaExecutionRecord = {
+      ...currentExecution,
+      provider: updates.provider === undefined ? currentExecution.provider || null : updates.provider,
+      status: updates.status ?? currentExecution.status,
+      resultSummary:
+        updates.resultSummary === undefined ? currentExecution.resultSummary || null : updates.resultSummary,
+    };
+
+    state.executions[executionIndex] = updatedExecution;
+    this.persist(state);
+    return updatedExecution;
+  }
+
   public async listLogs(limit = 50): Promise<LinaSystemLogRecord[]> {
     return this.load()
       .systemLogs
@@ -132,6 +176,7 @@ export class LocalMemoryStore implements MemoryStore {
       return {
         messages: [],
         tasks: [],
+        executions: [],
         systemLogs: [],
       };
     }
@@ -142,12 +187,14 @@ export class LocalMemoryStore implements MemoryStore {
       return {
         messages: parsed.messages || [],
         tasks: parsed.tasks || [],
+        executions: parsed.executions || [],
         systemLogs: parsed.systemLogs || [],
       };
     } catch {
       return {
         messages: [],
         tasks: [],
+        executions: [],
         systemLogs: [],
       };
     }

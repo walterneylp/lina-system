@@ -269,7 +269,8 @@ const html = `<!DOCTYPE html>
 
       .control,
       .task-form input,
-      .task-form select {
+      .task-form select,
+      .composer-form textarea {
         min-height: 44px;
         border-radius: 14px;
         border: 1px solid rgba(255,255,255,0.08);
@@ -284,7 +285,8 @@ const html = `<!DOCTYPE html>
       }
 
       .toolbar label,
-      .task-form label {
+      .task-form label,
+      .composer-form label {
         display: grid;
         gap: 6px;
         color: var(--muted);
@@ -299,6 +301,7 @@ const html = `<!DOCTYPE html>
       }
 
       .task-form button,
+      .composer-form button,
       .task-action {
         appearance: none;
         border: 0;
@@ -312,6 +315,38 @@ const html = `<!DOCTYPE html>
       .task-form button {
         background: rgba(84, 210, 167, 0.16);
         color: var(--good);
+      }
+
+      .composer-form {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .composer-form textarea {
+        min-height: 112px;
+        resize: vertical;
+        font-family: inherit;
+      }
+
+      .composer-grid {
+        display: grid;
+        grid-template-columns: 1fr minmax(180px, 220px) auto;
+        gap: 12px;
+        align-items: end;
+      }
+
+      .composer-form button {
+        background: linear-gradient(135deg, var(--accent), #ff8b5d);
+        color: #111;
+        font-weight: 800;
+      }
+
+      .composer-result {
+        padding: 16px;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
       }
 
       .task-actions {
@@ -463,6 +498,10 @@ const html = `<!DOCTYPE html>
         .task-form {
           grid-template-columns: 1fr;
         }
+
+        .composer-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -520,6 +559,30 @@ const html = `<!DOCTYPE html>
       </div>
 
       <section class="content-grid">
+        <article class="panel section">
+          <div class="section-head">
+            <h2>Composer</h2>
+            <p>Dispare execuções do orquestrador diretamente pelo painel.</p>
+          </div>
+          <form class="composer-form" id="composer-form">
+            <label>
+              Prompt
+              <textarea id="composer-text" placeholder="Ex: resuma o status atual da LiNa em 3 linhas" required></textarea>
+            </label>
+            <div class="composer-grid">
+              <label>
+                Vincular à tarefa
+                <select id="composer-task">
+                  <option value="">Sem tarefa</option>
+                </select>
+              </label>
+              <div></div>
+              <button type="submit">Executar</button>
+            </div>
+          </form>
+          <div class="composer-result" id="composer-result">Nenhuma execução disparada nesta sessão do painel.</div>
+        </article>
+
         <article class="panel section">
           <div class="section-head">
             <h2>Providers</h2>
@@ -609,6 +672,14 @@ const html = `<!DOCTYPE html>
           </div>
           <div class="feed" id="logs-feed"></div>
         </article>
+
+        <article class="panel section">
+          <div class="section-head">
+            <h2>Execuções</h2>
+            <p>Histórico recente do orquestrador com status, provider e resumo.</p>
+          </div>
+          <div class="feed" id="executions-feed"></div>
+        </article>
       </section>
     </main>
 
@@ -619,6 +690,7 @@ const html = `<!DOCTYPE html>
         providers: "/api/providers",
         messages: "/api/memory/messages",
         tasks: "/api/tasks",
+        executions: "/api/executions?limit=30",
         logs: "/api/logs?limit=30",
       };
 
@@ -628,6 +700,7 @@ const html = `<!DOCTYPE html>
         providers: {},
         messages: [],
         tasks: [],
+        executions: [],
         logs: [],
       };
 
@@ -641,6 +714,14 @@ const html = `<!DOCTYPE html>
         if (value === null || value === undefined || value === "") return "n/a";
         return String(value);
       };
+
+      const escapeHtml = (value) =>
+        safeText(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#39;");
 
       const formatTime = (value) => {
         if (!value) return "Sem data";
@@ -683,9 +764,9 @@ const html = `<!DOCTYPE html>
             <div class="status-row">
               <div>
                 <strong>\${item.label}</strong>
-                <span>\${item.description}</span>
+                <span>\${escapeHtml(item.description)}</span>
               </div>
-              <div class="badge \${badgeClass(item.value)}">\${badgeValue}</div>
+              <div class="badge \${badgeClass(item.value)}">\${escapeHtml(badgeValue)}</div>
             </div>
           \`;
         }).join("");
@@ -706,11 +787,11 @@ const html = `<!DOCTYPE html>
           return \`
             <article class="provider-card">
               <div class="feed-meta">
-                <strong>\${name}</strong>
+                <strong>\${escapeHtml(name)}</strong>
                 <span class="badge \${badgeClass(state)}">\${provider?.configured ? "ativo" : "off"}</span>
               </div>
-              <h3>\${model}</h3>
-              <p>\${safeText(provider?.details || "Provider carregado sem detalhe adicional.")}</p>
+              <h3>\${escapeHtml(model)}</h3>
+              <p>\${escapeHtml(provider?.details || "Provider carregado sem detalhe adicional.")}</p>
             </article>
           \`;
         }).join("");
@@ -751,19 +832,29 @@ const html = `<!DOCTYPE html>
         feed.innerHTML = filteredTasks.slice(0, 12).map((task) => \`
           <article class="feed-item">
             <div class="feed-meta">
-              <span class="badge \${badgeClass(task.status === "completed" ? "ok" : task.status === "failed" ? "degraded" : "configured")}">\${safeText(task.status)}</span>
+              <span class="badge \${badgeClass(task.status === "completed" ? "ok" : task.status === "failed" ? "degraded" : "configured")}">\${escapeHtml(task.status)}</span>
               <span>\${formatTime(task.createdAt)}</span>
             </div>
-            <div class="feed-title">\${safeText(task.title)}</div>
-            <div class="feed-body">Agente: \${safeText(task.assignedAgent)}</div>
+            <div class="feed-title">\${escapeHtml(task.title)}</div>
+            <div class="feed-body">Agente: \${escapeHtml(task.assignedAgent)}</div>
             <div class="task-actions">
-              <button class="task-action" data-task-id="\${task.id}" data-status="pending" type="button">pending</button>
-              <button class="task-action" data-task-id="\${task.id}" data-status="running" type="button">running</button>
-              <button class="task-action" data-task-id="\${task.id}" data-status="completed" type="button">completed</button>
-              <button class="task-action" data-task-id="\${task.id}" data-status="failed" type="button">failed</button>
+              <button class="task-action" data-task-id="\${escapeHtml(task.id)}" data-status="pending" type="button">pending</button>
+              <button class="task-action" data-task-id="\${escapeHtml(task.id)}" data-status="running" type="button">running</button>
+              <button class="task-action" data-task-id="\${escapeHtml(task.id)}" data-status="completed" type="button">completed</button>
+              <button class="task-action" data-task-id="\${escapeHtml(task.id)}" data-status="failed" type="button">failed</button>
             </div>
           </article>
         \`).join("");
+      };
+
+      const renderTaskOptions = (tasks) => {
+        const select = document.getElementById("composer-task");
+        const currentValue = select.value;
+        const options = ['<option value="">Sem tarefa</option>'].concat(
+          (tasks || []).map((task) => \`<option value="\${escapeHtml(task.id)}">\${escapeHtml(task.title)} (\${escapeHtml(task.status)})</option>\`)
+        );
+        select.innerHTML = options.join("");
+        select.value = currentValue;
       };
 
       const renderMessages = (messages) => {
@@ -786,10 +877,10 @@ const html = `<!DOCTYPE html>
         feed.innerHTML = filteredMessages.slice(-12).reverse().map((message) => \`
           <article class="feed-item">
             <div class="feed-meta">
-              <span class="badge neutral">\${safeText(message.role)}</span>
+              <span class="badge neutral">\${escapeHtml(message.role)}</span>
               <span>\${formatTime(message.createdAt)}</span>
             </div>
-            <div class="feed-body">\${safeText(message.content)}</div>
+            <div class="feed-body">\${escapeHtml(message.content)}</div>
           </article>
         \`).join("");
       };
@@ -814,10 +905,30 @@ const html = `<!DOCTYPE html>
         feed.innerHTML = filteredLogs.map((log) => \`
           <article class="feed-item">
             <div class="feed-meta">
-              <span class="badge \${badgeClass(log.level === "error" ? "degraded" : log.level === "info" ? "ok" : "configured")}">\${safeText(log.level)}</span>
+              <span class="badge \${badgeClass(log.level === "error" ? "degraded" : log.level === "info" ? "ok" : "configured")}">\${escapeHtml(log.level)}</span>
               <span>\${formatTime(log.createdAt)}</span>
             </div>
-            <div class="feed-body">\${safeText(log.message)}</div>
+            <div class="feed-body">\${escapeHtml(log.message)}</div>
+          </article>
+        \`).join("");
+      };
+
+      const renderExecutions = (executions) => {
+        const feed = document.getElementById("executions-feed");
+
+        if (!executions?.length) {
+          renderEmpty(feed, "Nenhuma execução registrada.");
+          return;
+        }
+
+        feed.innerHTML = executions.map((execution) => \`
+          <article class="feed-item">
+            <div class="feed-meta">
+              <span class="badge \${badgeClass(execution.status === "completed" ? "ok" : execution.status === "failed" ? "degraded" : "configured")}">\${escapeHtml(execution.status)}</span>
+              <span>\${formatTime(execution.createdAt)}</span>
+            </div>
+            <div class="feed-title">Provider: \${escapeHtml(execution.provider)}</div>
+            <div class="feed-body">\${escapeHtml(execution.resultSummary)}</div>
           </article>
         \`).join("");
       };
@@ -854,18 +965,20 @@ const html = `<!DOCTYPE html>
 
       const rerenderFeeds = () => {
         renderTasks(dashboardState.tasks);
+        renderExecutions(dashboardState.executions);
         renderMessages(dashboardState.messages);
         renderLogs(dashboardState.logs);
       };
 
       const refresh = async () => {
         try {
-          const [health, status, providers, messages, tasks, logs] = await Promise.all([
+          const [health, status, providers, messages, tasks, executions, logs] = await Promise.all([
             fetchJson(endpoints.health),
             fetchJson(endpoints.status),
             fetchJson(endpoints.providers),
             fetchJson(endpoints.messages),
             fetchJson(endpoints.tasks),
+            fetchJson(endpoints.executions),
             fetchJson(endpoints.logs),
           ]);
 
@@ -874,10 +987,12 @@ const html = `<!DOCTYPE html>
           dashboardState.providers = providers;
           dashboardState.messages = messages;
           dashboardState.tasks = tasks;
+          dashboardState.executions = executions;
           dashboardState.logs = logs;
 
           renderStatus(health, status);
           renderProviders(providers);
+          renderTaskOptions(tasks);
           rerenderFeeds();
           updateMetrics(health, providers, messages, tasks);
           document.getElementById("last-updated").textContent = "Atualizado em " + new Date().toLocaleString("pt-BR");
@@ -934,6 +1049,42 @@ const html = `<!DOCTYPE html>
           await refresh();
         } catch (error) {
           document.getElementById("last-updated").textContent = error instanceof Error ? error.message : "Falha ao atualizar tarefa";
+        }
+      });
+
+      document.getElementById("composer-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const textArea = document.getElementById("composer-text");
+        const taskSelect = document.getElementById("composer-task");
+        const resultBox = document.getElementById("composer-result");
+        const text = textArea.value.trim();
+
+        if (!text) {
+          return;
+        }
+
+        resultBox.textContent = "Executando...";
+
+        try {
+          const result = await sendJson("/api/orchestrator/run", "POST", {
+            text,
+            taskId: taskSelect.value || null,
+          });
+
+          resultBox.innerHTML = [
+            "<strong>Resposta</strong>",
+            "",
+            escapeHtml(result.answer),
+            "",
+            "Provider: " + escapeHtml(result.provider),
+            "Iterations: " + escapeHtml(result.iterations),
+            "Execution ID: " + escapeHtml(result.executionId),
+          ].join("<br />");
+
+          await refresh();
+        } catch (error) {
+          resultBox.textContent = error instanceof Error ? error.message : "Falha na execução";
         }
       });
 

@@ -82,7 +82,7 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
 
       if (method === "POST" && url === "/orchestrator/run") {
         const rawBody = await readBody(request);
-        const payload = JSON.parse(rawBody || "{}") as { text?: string };
+        const payload = JSON.parse(rawBody || "{}") as { text?: string; taskId?: string };
 
         if (!payload.text) {
           response.writeHead(400, { "Content-Type": "application/json" });
@@ -90,31 +90,52 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
           return;
         }
 
-        await dependencies.memoryManager.append("user", payload.text);
-        const persistence = await dependencies.memoryManager.getHealth();
-        const runtimeContext = JSON.stringify(
-          {
-            app: dependencies.env.appName,
-            environment: dependencies.env.appEnv,
-            persistence,
-            providers: dependencies.providerFactory.inspect(),
-            availableSkills: dependencies.skillLoader.load().map((skill) => ({
-              name: skill.name,
-              description: skill.description,
-            })),
-          },
-          null,
-          2
-        );
-        const result = await dependencies.orchestrator.handle({
-          text: payload.text,
-          runtimeContext,
+        const execution = await dependencies.memoryManager.createExecution({
+          taskId: payload.taskId || null,
+          status: "running",
+          provider: null,
+          resultSummary: null,
         });
-        await dependencies.memoryManager.append("assistant", result.answer);
 
-        response.writeHead(200, { "Content-Type": "application/json" });
-        response.end(JSON.stringify(result));
-        return;
+        try {
+          await dependencies.memoryManager.append("user", payload.text);
+          const persistence = await dependencies.memoryManager.getHealth();
+          const runtimeContext = JSON.stringify(
+            {
+              app: dependencies.env.appName,
+              environment: dependencies.env.appEnv,
+              persistence,
+              providers: dependencies.providerFactory.inspect(),
+              availableSkills: dependencies.skillLoader.load().map((skill) => ({
+                name: skill.name,
+                description: skill.description,
+              })),
+            },
+            null,
+            2
+          );
+          const result = await dependencies.orchestrator.handle({
+            text: payload.text,
+            runtimeContext,
+          });
+          await dependencies.memoryManager.append("assistant", result.answer);
+          await dependencies.memoryManager.updateExecution(execution.id || "", {
+            provider: result.provider,
+            status: "completed",
+            resultSummary: result.answer.slice(0, 500),
+          });
+
+          response.writeHead(200, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ ...result, executionId: execution.id || null }));
+          return;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Execution failed";
+          await dependencies.memoryManager.updateExecution(execution.id || "", {
+            status: "failed",
+            resultSummary: message,
+          });
+          throw error;
+        }
       }
 
       if (method === "GET" && url === "/memory/messages") {
@@ -139,6 +160,17 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
         );
         response.writeHead(200, { "Content-Type": "application/json" });
         response.end(JSON.stringify(logs));
+        return;
+      }
+
+      if (method === "GET" && url.startsWith("/executions")) {
+        const parsedUrl = new URL(url, `http://localhost:${dependencies.env.appPort}`);
+        const limit = Number.parseInt(parsedUrl.searchParams.get("limit") || "50", 10);
+        const executions = await dependencies.memoryManager.listExecutions(
+          Number.isFinite(limit) ? limit : 50
+        );
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(executions));
         return;
       }
 

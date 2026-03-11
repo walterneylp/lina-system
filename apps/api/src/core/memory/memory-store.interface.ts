@@ -1,5 +1,7 @@
 import {
   ConversationMessage,
+  LinaExecutionRecord,
+  LinaExecutionUpdate,
   LinaSystemLogRecord,
   LinaTaskRecord,
   LinaTaskUpdate,
@@ -19,6 +21,9 @@ export interface MemoryStore {
   createTask(task: LinaTaskRecord): Promise<LinaTaskRecord>;
   listTasks(): Promise<LinaTaskRecord[]>;
   updateTask(id: string, updates: LinaTaskUpdate): Promise<LinaTaskRecord>;
+  createExecution(execution: LinaExecutionRecord): Promise<LinaExecutionRecord>;
+  listExecutions(limit?: number): Promise<LinaExecutionRecord[]>;
+  updateExecution(id: string, updates: LinaExecutionUpdate): Promise<LinaExecutionRecord>;
   listLogs(limit?: number): Promise<LinaSystemLogRecord[]>;
   log(level: string, message: string): Promise<void>;
 }

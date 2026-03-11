@@ -2,6 +2,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { MemoryStore } from "./memory-store.interface";
 import {
   ConversationMessage,
+  LinaExecutionRecord,
+  LinaExecutionUpdate,
   LinaSystemLogRecord,
   LinaTaskRecord,
   LinaTaskUpdate,
@@ -186,6 +188,89 @@ export class SupabaseMemoryStore implements MemoryStore {
       title: data.title,
       status: data.status,
       assignedAgent: data.assigned_agent,
+      createdAt: data.created_at,
+    };
+  }
+
+  public async createExecution(execution: LinaExecutionRecord): Promise<LinaExecutionRecord> {
+    const { data, error } = await this.client
+      .from("executions")
+      .insert({
+        task_id: execution.taskId || null,
+        provider: execution.provider || null,
+        status: execution.status,
+        result_summary: execution.resultSummary || null,
+      })
+      .select("id, task_id, provider, status, result_summary, created_at")
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to create execution: ${error?.message || "unknown error"}`);
+    }
+
+    return {
+      id: data.id,
+      taskId: data.task_id,
+      provider: data.provider,
+      status: data.status,
+      resultSummary: data.result_summary,
+      createdAt: data.created_at,
+    };
+  }
+
+  public async listExecutions(limit = 50): Promise<LinaExecutionRecord[]> {
+    const { data, error } = await this.client
+      .from("executions")
+      .select("id, task_id, provider, status, result_summary, created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to list executions: ${error.message}`);
+    }
+
+    return ((data || []) as Array<Record<string, string>>).map((item: Record<string, string>) => ({
+      id: item.id,
+      taskId: item.task_id,
+      provider: item.provider,
+      status: item.status,
+      resultSummary: item.result_summary,
+      createdAt: item.created_at,
+    }));
+  }
+
+  public async updateExecution(id: string, updates: LinaExecutionUpdate): Promise<LinaExecutionRecord> {
+    const payload: Record<string, string | null> = {};
+
+    if (updates.provider !== undefined) {
+      payload.provider = updates.provider;
+    }
+
+    if (updates.status !== undefined) {
+      payload.status = updates.status;
+    }
+
+    if (updates.resultSummary !== undefined) {
+      payload.result_summary = updates.resultSummary;
+    }
+
+    const { data, error } = await this.client
+      .from("executions")
+      .update(payload)
+      .eq("id", id)
+      .select("id, task_id, provider, status, result_summary, created_at")
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to update execution: ${error?.message || "unknown error"}`);
+    }
+
+    return {
+      id: data.id,
+      taskId: data.task_id,
+      provider: data.provider,
+      status: data.status,
+      resultSummary: data.result_summary,
       createdAt: data.created_at,
     };
   }

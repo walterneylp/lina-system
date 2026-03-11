@@ -35,3 +35,18 @@ export type LinaSystemLogRecord = {
   message: string;
   createdAt: string;
 };
+
+export type LinaExecutionRecord = {
+  id?: string;
+  taskId?: string | null;
+  provider?: string | null;
+  status: string;
+  resultSummary?: string | null;
+  createdAt?: string;
+};
+
+export type LinaExecutionUpdate = {
+  provider?: string | null;
+  status?: string;
+  resultSummary?: string | null;
+};
