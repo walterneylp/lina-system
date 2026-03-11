@@ -61,11 +61,30 @@ export class TelegramInputHandler {
     metadata?: ConversationMessageMetadata
   ): Promise<void> {
     await this.options.memoryManager.append("user", text, metadata);
+
+    const greetingReply = this.buildGreetingReply(text, metadata);
+    if (greetingReply) {
+      await this.options.memoryManager.append("assistant", greetingReply, {
+        source: "telegram",
+        channel: "telegram",
+        chatId,
+        chatType: metadata?.chatType || null,
+        userId: metadata?.userId || null,
+        username: metadata?.username || null,
+        firstName: metadata?.firstName || null,
+        messageType: "text",
+        transportMessageId: null,
+      });
+      await this.options.outputHandler.sendText(chatId, greetingReply);
+      return;
+    }
+
     await this.options.client.sendChatAction(chatId, "typing");
 
     const result = await this.options.orchestrator.handle({ text });
+    const finalAnswer = await this.ensurePortugueseAnswer(result.answer);
 
-    await this.options.memoryManager.append("assistant", result.answer, {
+    await this.options.memoryManager.append("assistant", finalAnswer, {
       source: "telegram",
       channel: "telegram",
       chatId,
@@ -76,7 +95,7 @@ export class TelegramInputHandler {
       messageType: "text",
       transportMessageId: null,
     });
-    await this.options.outputHandler.sendText(chatId, result.answer);
+    await this.options.outputHandler.sendText(chatId, finalAnswer);
   }
 
   private async processAudio(
@@ -244,5 +263,78 @@ export class TelegramInputHandler {
       messageType,
       transportMessageId: update.message?.message_id ? String(update.message.message_id) : null,
     };
+  }
+
+  private buildGreetingReply(
+    text: string,
+    metadata?: ConversationMessageMetadata
+  ): string | null {
+    const normalized = text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[!?.,;:]/g, "")
+      .trim();
+
+    const greetings = new Set([
+      "oi",
+      "ola",
+      "bom dia",
+      "boa tarde",
+      "boa noite",
+      "e ai",
+      "ei",
+      "olá",
+    ]);
+
+    if (!greetings.has(normalized)) {
+      return null;
+    }
+
+    const firstName = metadata?.firstName?.trim();
+    if (firstName) {
+      return `Oi, ${firstName}. Como posso ajudar?`;
+    }
+
+    return "Oi. Como posso ajudar?";
+  }
+
+  private async ensurePortugueseAnswer(answer: string): Promise<string> {
+    const trimmed = answer.trim();
+
+    if (!trimmed || !this.looksLikeEnglish(trimmed)) {
+      return trimmed;
+    }
+
+    try {
+      const rewritten = await this.options.orchestrator.handle({
+        text: [
+          "Reescreva a resposta abaixo em português do Brasil.",
+          "Mantenha o sentido original.",
+          "Seja natural e direto.",
+          "Nao acrescente inventario de componentes nem status generico se isso nao for indispensavel.",
+          "",
+          trimmed,
+        ].join("\n"),
+      });
+
+      const normalized = rewritten.answer.trim();
+      return normalized || trimmed;
+    } catch {
+      return trimmed;
+    }
+  }
+
+  private looksLikeEnglish(text: string): boolean {
+    const englishSignals = [
+      /\b(system|currently|running|development|environment|components|operational|testing|what would you like)\b/i,
+      /\bskills?\b/i,
+      /\btask management\b/i,
+      /\bready for testing\b/i,
+      /\bsupabase persistence\b/i,
+      /\btelegram integration\b/i,
+    ];
+
+    return englishSignals.some((pattern) => pattern.test(text));
   }
 }
