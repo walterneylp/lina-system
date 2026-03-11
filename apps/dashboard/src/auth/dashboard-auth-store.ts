@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash } from "node:crypto";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { DashboardPermissionSet, DashboardRole, getDashboardPermissions, normalizeDashboardRole } from "./dashboard-rbac";
 
 type DashboardAuthStoreOptions = {
   url: string;
@@ -9,7 +10,8 @@ type DashboardAuthStoreOptions = {
 export type DashboardAuthUser = {
   id: string;
   username: string;
-  role: string;
+  role: DashboardRole;
+  permissions: DashboardPermissionSet;
   isActive: boolean;
   telegramUserIds: string[];
   createdAt: string;
@@ -99,6 +101,35 @@ export class DashboardAuthStore {
           .filter(Boolean)
       )
     );
+  }
+
+  public async getUserByTelegramUserId(telegramUserId: string): Promise<DashboardAuthUser | null> {
+    const normalizedTarget = String(telegramUserId || "").trim();
+
+    if (!normalizedTarget) {
+      return null;
+    }
+
+    const users = await this.listUsers();
+    return (
+      users.find(
+        (user) =>
+          user.isActive &&
+          (user.telegramUserIds || []).some((value) => value.trim() === normalizedTarget)
+      ) || null
+    );
+  }
+
+  public async appendSystemLog(level: string, message: string): Promise<void> {
+    const { error } = await this.client.from("system_logs").insert({
+      level,
+      message,
+      created_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      throw new Error(`Failed to write dashboard system log: ${error.message}`);
+    }
   }
 
   public async authenticate(username: string, password: string): Promise<DashboardSession> {
@@ -283,7 +314,7 @@ export class DashboardAuthStore {
   public async createUser(input: {
     username: string;
     password: string;
-    role?: string;
+    role?: DashboardRole;
     telegramUserIds?: string[];
   }): Promise<DashboardAuthUser> {
     this.validateCredentials(input.username, input.password);
@@ -299,7 +330,7 @@ export class DashboardAuthStore {
         id: randomUUID(),
         username: input.username.trim(),
         password_hash: this.hashPassword(input.password),
-        role: input.role || "admin",
+        role: normalizeDashboardRole(input.role || "viewer"),
         is_active: true,
         telegram_user_ids: this.normalizeTelegramUserIds(input.telegramUserIds || []),
         updated_at: new Date().toISOString(),
@@ -315,7 +346,7 @@ export class DashboardAuthStore {
   }
 
   public async updateUser(username: string, updates: {
-    role?: string;
+    role?: DashboardRole;
     isActive?: boolean;
     telegramUserIds?: string[];
   }): Promise<DashboardAuthUser> {
@@ -330,7 +361,7 @@ export class DashboardAuthStore {
     };
 
     if (updates.role) {
-      payload.role = updates.role;
+      payload.role = normalizeDashboardRole(updates.role);
     }
 
     if (typeof updates.isActive === "boolean") {
@@ -508,7 +539,8 @@ export class DashboardAuthStore {
     return {
       id: String(item.id || ""),
       username: String(item.username || ""),
-      role: String(item.role || "admin"),
+      role: normalizeDashboardRole(String(item.role || "viewer")),
+      permissions: getDashboardPermissions(String(item.role || "viewer")),
       isActive: item.is_active === true,
       telegramUserIds: Array.isArray(item.telegram_user_ids)
         ? item.telegram_user_ids.map((value) => String(value))

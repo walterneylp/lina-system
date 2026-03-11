@@ -36,9 +36,9 @@ export class TelegramInputHandler {
       return;
     }
 
-    const isAllowed = await this.options.accessControl.isAllowed(userId);
+    const actor = await this.options.accessControl.resolveActor(userId);
 
-    if (!isAllowed) {
+    if (!actor) {
       await this.options.memoryManager.log(
         "warn",
         `[telegram-access-denied] ${metadata?.username || metadata?.userId || "unknown"}`
@@ -51,7 +51,7 @@ export class TelegramInputHandler {
     }
 
     if (text) {
-      await this.processText(chatId, text, metadata);
+      await this.processText(chatId, text, metadata, actor.username);
       return;
     }
 
@@ -62,7 +62,8 @@ export class TelegramInputHandler {
         voice ? "voice" : "audio",
         voice?.mime_type || audio?.mime_type,
         audio?.file_name,
-        metadata
+        metadata,
+        actor.username
       );
       return;
     }
@@ -76,14 +77,18 @@ export class TelegramInputHandler {
   private async processText(
     chatId: string,
     text: string,
-    metadata?: ConversationMessageMetadata
+    metadata?: ConversationMessageMetadata,
+    actorUsername?: string
   ): Promise<void> {
-    const commandReply = await this.options.commandService.handle(text);
+    const actor = metadata?.userId
+      ? await this.options.accessControl.resolveActor(String(metadata.userId))
+      : null;
+    const commandReply = await this.options.commandService.handle(text, actor);
 
     if (commandReply) {
       await this.options.memoryManager.log(
         "info",
-        `[telegram-command] ${metadata?.username || metadata?.userId || "unknown"} -> ${text}`
+        `[telegram-command] ${actorUsername || actor?.username || metadata?.username || metadata?.userId || "unknown"} -> ${text}`
       );
       await this.options.memoryManager.append("user", text, metadata);
       await this.options.memoryManager.append("assistant", commandReply, {
@@ -145,7 +150,8 @@ export class TelegramInputHandler {
     sourceType: "voice" | "audio",
     mimeType?: string,
     preferredFileName?: string,
-    metadata?: ConversationMessageMetadata
+    metadata?: ConversationMessageMetadata,
+    actorUsername?: string
   ): Promise<void> {
     if (!fileId) {
       await this.options.outputHandler.sendText(chatId, "Nao consegui identificar o arquivo de audio.");
@@ -210,7 +216,7 @@ export class TelegramInputHandler {
         return;
       }
 
-      await this.processText(chatId, transcript, metadata);
+      await this.processText(chatId, transcript, metadata, actorUsername);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha desconhecida ao processar audio";
       await this.options.outputHandler.sendText(

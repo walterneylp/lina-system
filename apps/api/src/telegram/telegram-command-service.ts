@@ -4,6 +4,7 @@ import { LinaOrchestrator } from "../core/orchestrator/orchestrator";
 import { ProviderFactory } from "../core/providers/provider-factory";
 import { SkillLoader } from "../core/skills/skill-loader";
 import { TelegramRuntime } from "./telegram-runtime";
+import { TelegramAuthorizedActor } from "./telegram-access-control";
 import { DashboardAuthStore } from "../../../dashboard/src/auth/dashboard-auth-store";
 
 type TelegramCommandServiceOptions = {
@@ -34,7 +35,7 @@ export class TelegramCommandService {
         : null;
   }
 
-  public async handle(text: string): Promise<string | null> {
+  public async handle(text: string, actor?: TelegramAuthorizedActor | null): Promise<string | null> {
     const command = this.parseCommand(text);
 
     if (!command) {
@@ -44,7 +45,7 @@ export class TelegramCommandService {
     switch (command.name) {
       case "help":
       case "ajuda":
-        return this.handleHelp();
+        return this.handleHelp(actor);
       case "health":
         return this.handleHealth();
       case "status":
@@ -53,9 +54,9 @@ export class TelegramCommandService {
       case "tarefas":
         return this.handleTasks(command.args);
       case "run":
-        return this.handleRun(command.rawArgs);
+        return this.handleRun(command.rawArgs, actor);
       case "dashboard":
-        return this.handleDashboard(command.args);
+        return this.handleDashboard(command.args, actor);
       default:
         return "Comando nao reconhecido. Use /help para ver os comandos disponiveis.";
     }
@@ -135,7 +136,11 @@ export class TelegramCommandService {
     ].join("\n");
   }
 
-  private async handleRun(rawArgs: string): Promise<string> {
+  private async handleRun(rawArgs: string, actor?: TelegramAuthorizedActor | null): Promise<string> {
+    if (!actor?.permissions.useTelegramRun) {
+      return "Seu papel atual nao permite executar /run no Telegram.";
+    }
+
     const text = rawArgs.trim();
 
     if (!text) {
@@ -172,11 +177,11 @@ export class TelegramCommandService {
     ].join("\n");
   }
 
-  private async handleDashboard(args: string[]): Promise<string> {
+  private async handleDashboard(args: string[], actor?: TelegramAuthorizedActor | null): Promise<string> {
     const [scope, value] = args.map((item) => item.toLowerCase());
 
     if (scope === "bootstrap") {
-      return this.handleDashboardBootstrap(value);
+      return this.handleDashboardBootstrap(value, actor);
     }
 
     if (!this.dashboardAuthStore) {
@@ -184,39 +189,53 @@ export class TelegramCommandService {
     }
 
     if (scope === "users") {
-      return this.handleDashboardUsers();
+      return this.handleDashboardUsers(actor);
     }
 
     if (scope === "user") {
-      return this.handleDashboardUser(args.slice(1));
+      return this.handleDashboardUser(args.slice(1), actor);
     }
 
     if (scope === "password") {
-      return this.handleDashboardPassword(args.slice(1));
+      return this.handleDashboardPassword(args.slice(1), actor);
     }
 
     return "Use /dashboard bootstrap status|on|off, /dashboard users, /dashboard user status|enable|disable <usuario> ou /dashboard password <usuario> <novaSenha>";
   }
 
-  private handleHelp(): string {
-    return [
+  private handleHelp(actor?: TelegramAuthorizedActor | null): string {
+    const lines = [
       "Comandos Telegram da LiNa",
       "/health",
       "/status",
       "/tasks [limite]",
-      "/run <prompt>",
-      "/dashboard bootstrap status",
-      "/dashboard bootstrap on",
-      "/dashboard bootstrap off",
-      "/dashboard users",
-      "/dashboard user status <usuario>",
-      "/dashboard user enable <usuario>",
-      "/dashboard user disable <usuario>",
-      "/dashboard password <usuario> <novaSenha>",
-    ].join("\n");
+    ];
+
+    if (actor?.permissions.useTelegramRun) {
+      lines.push("/run <prompt>");
+    }
+
+    if (actor?.permissions.useTelegramAdmin) {
+      lines.push(
+        "/dashboard bootstrap status",
+        "/dashboard bootstrap on",
+        "/dashboard bootstrap off",
+        "/dashboard users",
+        "/dashboard user status <usuario>",
+        "/dashboard user enable <usuario>",
+        "/dashboard user disable <usuario>",
+        "/dashboard password <usuario> <novaSenha>"
+      );
+    }
+
+    return lines.join("\n");
   }
 
-  private async handleDashboardBootstrap(value?: string): Promise<string> {
+  private async handleDashboardBootstrap(value?: string, actor?: TelegramAuthorizedActor | null): Promise<string> {
+    if (!actor?.permissions.useTelegramAdmin) {
+      return "Seu papel atual nao permite comandos administrativos do dashboard no Telegram.";
+    }
+
     if (!this.dashboardAuthStore) {
       return "A configuracao do dashboard no banco nao esta disponivel neste ambiente.";
     }
@@ -236,6 +255,10 @@ export class TelegramCommandService {
 
     const enabled = value === "on";
     await this.dashboardAuthStore.setAllowAdminBootstrap(enabled);
+    await this.options.memoryManager.log(
+      "info",
+      `[telegram-admin] ${actor?.username || "unknown"} set bootstrap ${enabled ? "on" : "off"}`
+    );
     const authState = await this.dashboardAuthStore.getAuthState();
 
     return [
@@ -245,7 +268,11 @@ export class TelegramCommandService {
     ].join("\n");
   }
 
-  private async handleDashboardUsers(): Promise<string> {
+  private async handleDashboardUsers(actor?: TelegramAuthorizedActor | null): Promise<string> {
+    if (!actor?.permissions.useTelegramAdmin) {
+      return "Seu papel atual nao permite comandos administrativos do dashboard no Telegram.";
+    }
+
     const users = await this.dashboardAuthStore!.listUsers();
 
     if (!users.length) {
@@ -261,7 +288,11 @@ export class TelegramCommandService {
     ].join("\n");
   }
 
-  private async handleDashboardUser(args: string[]): Promise<string> {
+  private async handleDashboardUser(args: string[], actor?: TelegramAuthorizedActor | null): Promise<string> {
+    if (!actor?.permissions.useTelegramAdmin) {
+      return "Seu papel atual nao permite comandos administrativos do dashboard no Telegram.";
+    }
+
     const [action, username] = args;
 
     if (!action || !username) {
@@ -291,6 +322,10 @@ export class TelegramCommandService {
         user.username,
         action === "enable"
       );
+      await this.options.memoryManager.log(
+        "info",
+        `[telegram-admin] ${actor?.username || "unknown"} set user ${updated.username} ${updated.isActive ? "active" : "inactive"}`
+      );
       return [
         "Usuário atualizado",
         `- usuario: ${updated.username}`,
@@ -301,7 +336,11 @@ export class TelegramCommandService {
     return "Use /dashboard user status|enable|disable <usuario>";
   }
 
-  private async handleDashboardPassword(args: string[]): Promise<string> {
+  private async handleDashboardPassword(args: string[], actor?: TelegramAuthorizedActor | null): Promise<string> {
+    if (!actor?.permissions.useTelegramAdmin) {
+      return "Seu papel atual nao permite comandos administrativos do dashboard no Telegram.";
+    }
+
     const [username, ...passwordParts] = args;
     const newPassword = passwordParts.join(" ").trim();
 
@@ -310,6 +349,10 @@ export class TelegramCommandService {
     }
 
     const updated = await this.dashboardAuthStore!.setUserPassword(username, newPassword);
+    await this.options.memoryManager.log(
+      "warn",
+      `[telegram-admin] ${actor?.username || "unknown"} reset password for ${updated.username}`
+    );
 
     return [
       "Senha atualizada",

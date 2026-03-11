@@ -2,6 +2,7 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { DashboardAuthState, DashboardAuthStore } from "./auth/dashboard-auth-store";
+import { DashboardPermissionSet, DashboardRole, getDashboardPermissions, normalizeDashboardRole } from "./auth/dashboard-rbac";
 
 const parseDotEnv = (): Record<string, string> => {
   if (!existsSync(".env")) {
@@ -273,10 +274,40 @@ type DashboardRequestAuthContext = {
   currentUser: {
     id: string;
     username: string;
-    role: string;
+    role: DashboardRole;
+    permissions: DashboardPermissionSet;
   } | null;
   authState: DashboardAuthState | null;
   authError?: string | null;
+};
+
+const hasPermission = (
+  authContext: DashboardRequestAuthContext,
+  permission: keyof DashboardPermissionSet
+): boolean => Boolean(authContext.currentUser?.permissions?.[permission]);
+
+const requirePermission = (
+  response: ServerResponse,
+  authContext: DashboardRequestAuthContext,
+  permission: keyof DashboardPermissionSet
+): boolean => {
+  if (hasPermission(authContext, permission)) {
+    return true;
+  }
+
+  sendJson(response, 403, { error: "Forbidden" });
+  return false;
+};
+
+const logDashboardAudit = async (
+  message: string,
+  level = "info"
+): Promise<void> => {
+  if (dashboardAuthMode !== "database" || !dashboardAuthStore) {
+    return;
+  }
+
+  await dashboardAuthStore.appendSystemLog(level, `[dashboard-audit] ${message}`);
 };
 
 const getRequestAuthContext = async (
@@ -300,6 +331,7 @@ const getRequestAuthContext = async (
             id: "legacy-token",
             username: "legacy-admin",
             role: "admin",
+            permissions: getDashboardPermissions("admin"),
           }
         : null,
       authState: null,
@@ -319,6 +351,7 @@ const getRequestAuthContext = async (
             id: currentUser.id,
             username: currentUser.username,
             role: currentUser.role,
+            permissions: currentUser.permissions,
           }
         : null,
       authState,
@@ -1378,6 +1411,14 @@ const html = `<!DOCTYPE html>
                   <input id="create-user-username" class="control" type="text" placeholder="ex: operador.lina" required />
                 </label>
                 <label>
+                  Papel
+                  <select id="create-user-role" class="control">
+                    <option value="viewer">viewer</option>
+                    <option value="operator">operator</option>
+                    <option value="admin">admin</option>
+                  </select>
+                </label>
+                <label>
                   Senha inicial
                   <input id="create-user-password" class="control" type="password" placeholder="mínimo 8 caracteres" required />
                 </label>
@@ -1396,6 +1437,14 @@ const html = `<!DOCTYPE html>
                 <label>
                   Usuário
                   <select id="manage-user-select" class="control"></select>
+                </label>
+                <label>
+                  Papel
+                  <select id="manage-user-role" class="control">
+                    <option value="viewer">viewer</option>
+                    <option value="operator">operator</option>
+                    <option value="admin">admin</option>
+                  </select>
                 </label>
                 <label>
                   IDs do Telegram
@@ -1505,6 +1554,64 @@ const html = `<!DOCTYPE html>
           .split(",")
           .map((item) => item.trim())
           .filter(Boolean);
+
+      const hasUiPermission = (permission) =>
+        Boolean(dashboardState.auth?.currentUser?.permissions?.[permission]);
+
+      const setElementVisibility = (selector, visible) => {
+        const element = document.querySelector(selector);
+        if (!element) {
+          return;
+        }
+
+        element.style.display = visible ? "" : "none";
+      };
+
+      const setElementDisabled = (selector, disabled) => {
+        const element = document.querySelector(selector);
+        if (!element) {
+          return;
+        }
+
+        element.disabled = disabled;
+      };
+
+      const applyPermissionState = (authPayload) => {
+        const currentUser = authPayload?.currentUser;
+        const permissions = currentUser?.permissions || {};
+
+        const canManageUsers = Boolean(permissions.manageUsers);
+        const canManageBootstrap = Boolean(permissions.manageBootstrap);
+        const canManageTasks = Boolean(permissions.manageTasks);
+        const canRunComposer = Boolean(permissions.runComposer);
+        const canViewLogs = Boolean(permissions.viewLogs);
+
+        setElementVisibility('.view-tab[data-view="composer"]', canRunComposer);
+        setElementVisibility('[data-view-panel="composer"]', canRunComposer);
+        setElementVisibility('.view-tab[data-view="logs"]', canViewLogs);
+        setElementVisibility('[data-view-panel="logs"]', canViewLogs);
+
+        setElementVisibility("#create-user-form", canManageUsers);
+        setElementVisibility("#manage-user-form", canManageUsers);
+        setElementVisibility("#bootstrap-toggle-button", canManageBootstrap);
+
+        setElementDisabled("#task-title", !canManageTasks);
+        setElementDisabled("#task-agent", !canManageTasks);
+        setElementDisabled("#task-status", !canManageTasks);
+        setElementDisabled("#task-form button[type=\"submit\"]", !canManageTasks);
+
+        setElementDisabled("#composer-text", !canRunComposer);
+        setElementDisabled("#composer-task", !canRunComposer);
+        setElementDisabled("#composer-form button[type=\"submit\"]", !canRunComposer);
+
+        if (dashboardState.activeView === "composer" && !canRunComposer) {
+          dashboardState.activeView = "overview";
+        }
+
+        if (dashboardState.activeView === "logs" && !canViewLogs) {
+          dashboardState.activeView = "overview";
+        }
+      };
 
       const applyTheme = () => {
         const theme = dashboardState.theme === "light" ? "light" : "dark";
@@ -1644,6 +1751,7 @@ const html = `<!DOCTYPE html>
 
       const renderTasks = (tasks) => {
         const feed = document.getElementById("tasks-feed");
+        const canManageTasks = hasUiPermission("manageTasks");
         const filters = getTaskFilters();
         const filteredTasks = (tasks || []).filter((task) => {
           const statusMatch = !filters.status || task.status === filters.status;
@@ -1668,10 +1776,15 @@ const html = `<!DOCTYPE html>
             <div class="feed-title">\${escapeHtml(task.title)}</div>
             <div class="feed-body">Agente: \${escapeHtml(task.assignedAgent)}</div>
             <div class="task-actions">
-              <button class="task-action" data-task-id="\${escapeHtml(task.id)}" data-status="pending" type="button">pending</button>
-              <button class="task-action" data-task-id="\${escapeHtml(task.id)}" data-status="running" type="button">running</button>
-              <button class="task-action" data-task-id="\${escapeHtml(task.id)}" data-status="completed" type="button">completed</button>
-              <button class="task-action" data-task-id="\${escapeHtml(task.id)}" data-status="failed" type="button">failed</button>
+              \${canManageTasks
+                ? [
+                    '<button class="task-action" data-task-id="' + escapeHtml(task.id) + '" data-status="pending" type="button">pending</button>',
+                    '<button class="task-action" data-task-id="' + escapeHtml(task.id) + '" data-status="running" type="button">running</button>',
+                    '<button class="task-action" data-task-id="' + escapeHtml(task.id) + '" data-status="completed" type="button">completed</button>',
+                    '<button class="task-action" data-task-id="' + escapeHtml(task.id) + '" data-status="failed" type="button">failed</button>',
+                  ].join("")
+                : '<span class="muted">Somente operator/admin podem alterar status.</span>'
+              }
             </div>
           </article>
         \`).join("");
@@ -1842,6 +1955,8 @@ const html = `<!DOCTYPE html>
         const currentUser = authPayload.currentUser;
         const authState = authPayload.authState;
         const users = authPayload.users || [];
+        const canManageUsers = Boolean(currentUser?.permissions?.manageUsers);
+        const canManageBootstrap = Boolean(currentUser?.permissions?.manageBootstrap);
 
         pill.textContent = currentUser
           ? safeText(currentUser.username) + " · " + safeText(currentUser.role)
@@ -1858,6 +1973,7 @@ const html = `<!DOCTYPE html>
         toggleButton.textContent = authState?.allowAdminBootstrap
           ? "Desabilitar bootstrap admin"
           : "Habilitar bootstrap admin";
+        toggleButton.style.display = canManageBootstrap ? "" : "none";
 
         const currentManagedUsername = manageUserSelect.value;
         manageUserSelect.innerHTML = users.length
@@ -1880,12 +1996,21 @@ const html = `<!DOCTYPE html>
 
         if (selectedUser) {
           manageUserSelect.value = selectedUser.username;
+          const manageUserRole = document.getElementById("manage-user-role");
+          manageUserRole.value = selectedUser.role || "viewer";
           manageUserTelegramIds.value = (selectedUser.telegramUserIds || []).join(", ");
           manageUserActive.value = selectedUser.isActive ? "true" : "false";
         } else {
+          const manageUserRole = document.getElementById("manage-user-role");
+          manageUserRole.value = "viewer";
           manageUserTelegramIds.value = "";
           manageUserActive.value = "true";
         }
+
+        const createUserForm = document.getElementById("create-user-form");
+        const manageUserForm = document.getElementById("manage-user-form");
+        createUserForm.style.display = canManageUsers ? "" : "none";
+        manageUserForm.style.display = canManageUsers ? "" : "none";
 
         const userCards = users.length
           ? users.map((user) => \`
@@ -1908,6 +2033,7 @@ const html = `<!DOCTYPE html>
               <span>Usuários: \${escapeHtml(authState?.usersCount || 0)}</span>
             </div>
             <div class="feed-body">Se o bootstrap estiver habilitado, a tela de login mostrará o formulário para cadastrar um administrador inicial.</div>
+            <div class="feed-submeta">Permissões atuais: \${canManageUsers ? "gestão de usuários ativa" : "somente troca da própria senha"}</div>
           </article>\`,
           userCards,
         ].join("");
@@ -2014,6 +2140,7 @@ const html = `<!DOCTYPE html>
           dashboardState.logs = logs;
           dashboardState.auth = auth;
 
+          applyPermissionState(auth);
           renderStatus(health, status);
           renderProviders(providers);
           renderTaskOptions(tasks);
@@ -2057,16 +2184,19 @@ const html = `<!DOCTYPE html>
         event.preventDefault();
 
         const usernameInput = document.getElementById("create-user-username");
+        const roleInput = document.getElementById("create-user-role");
         const passwordInput = document.getElementById("create-user-password");
         const telegramIdsInput = document.getElementById("create-user-telegram-ids");
 
         try {
           await sendJson(endpoints.authUsers, "POST", {
             username: usernameInput.value.trim(),
+            role: roleInput.value,
             password: passwordInput.value,
             telegramUserIds: parseTelegramIds(telegramIdsInput.value),
           });
           usernameInput.value = "";
+          roleInput.value = "viewer";
           passwordInput.value = "";
           telegramIdsInput.value = "";
           await refresh();
@@ -2078,6 +2208,7 @@ const html = `<!DOCTYPE html>
         event.preventDefault();
 
         const userSelect = document.getElementById("manage-user-select");
+        const roleInput = document.getElementById("manage-user-role");
         const telegramIdsInput = document.getElementById("manage-user-telegram-ids");
         const activeSelect = document.getElementById("manage-user-active");
         const passwordInput = document.getElementById("manage-user-password");
@@ -2089,6 +2220,7 @@ const html = `<!DOCTYPE html>
 
         try {
           await sendJson(\`\${endpoints.authUsers}/\${encodeURIComponent(username)}\`, "PATCH", {
+            role: roleInput.value,
             telegramUserIds: parseTelegramIds(telegramIdsInput.value),
             isActive: activeSelect.value === "true",
           });
@@ -2341,6 +2473,7 @@ const server = createServer(async (request, response) => {
 
       try {
         const session = await dashboardAuthStore!.bootstrapAdmin(username, password);
+        await logDashboardAudit(`bootstrap admin created: ${session.user.username}`);
         response.writeHead(302, {
           Location: "/",
           "Set-Cookie": buildSessionCookie(session.token, 60 * 60 * 24 * 7),
@@ -2388,6 +2521,7 @@ const server = createServer(async (request, response) => {
           currentPassword,
           newPassword,
         });
+        await logDashboardAudit(`password changed from login screen: ${username}`);
         response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         response.end(
           loginHtml({
@@ -2433,7 +2567,7 @@ const server = createServer(async (request, response) => {
         mode: dashboardAuthMode,
         currentUser: authContext.currentUser,
         authState: await dashboardAuthStore!.getAuthState(),
-        users: await dashboardAuthStore!.listUsers(),
+        users: hasPermission(authContext, "manageUsers") ? await dashboardAuthStore!.listUsers() : [],
       });
       return;
     }
@@ -2443,11 +2577,17 @@ const server = createServer(async (request, response) => {
         sendJson(response, 401, { error: "Unauthorized" });
         return;
       }
+      if (!requirePermission(response, authContext, "manageBootstrap")) {
+        return;
+      }
 
       const rawBody = JSON.parse((await readBody(request)).toString("utf8") || "{}") as {
         enabled?: boolean;
       };
       await dashboardAuthStore!.setAllowAdminBootstrap(Boolean(rawBody.enabled));
+      await logDashboardAudit(
+        `${authContext.currentUser?.username || "unknown"} set bootstrap to ${Boolean(rawBody.enabled) ? "on" : "off"}`
+      );
       sendJson(response, 200, {
         ok: true,
         authState: await dashboardAuthStore!.getAuthState(),
@@ -2460,18 +2600,26 @@ const server = createServer(async (request, response) => {
         sendJson(response, 401, { error: "Unauthorized" });
         return;
       }
+      if (!requirePermission(response, authContext, "manageUsers")) {
+        return;
+      }
 
       const rawBody = JSON.parse((await readBody(request)).toString("utf8") || "{}") as {
         username?: string;
         password?: string;
+        role?: string;
         telegramUserIds?: string[];
       };
 
       const user = await dashboardAuthStore!.createUser({
         username: rawBody.username || "",
         password: rawBody.password || "",
+        role: normalizeDashboardRole(rawBody.role),
         telegramUserIds: rawBody.telegramUserIds || [],
       });
+      await logDashboardAudit(
+        `${authContext.currentUser?.username || "unknown"} created user ${user.username} as ${user.role}`
+      );
       sendJson(response, 201, { ok: true, user });
       return;
     }
@@ -2481,17 +2629,25 @@ const server = createServer(async (request, response) => {
         sendJson(response, 401, { error: "Unauthorized" });
         return;
       }
+      if (!requirePermission(response, authContext, "manageUsers")) {
+        return;
+      }
 
       const username = decodeURIComponent(url.split("/")[4] || "");
       const rawBody = JSON.parse((await readBody(request)).toString("utf8") || "{}") as {
+        role?: string;
         isActive?: boolean;
         telegramUserIds?: string[];
       };
 
       const user = await dashboardAuthStore!.updateUser(username, {
+        role: rawBody.role ? normalizeDashboardRole(rawBody.role) : undefined,
         isActive: rawBody.isActive,
         telegramUserIds: rawBody.telegramUserIds,
       });
+      await logDashboardAudit(
+        `${authContext.currentUser?.username || "unknown"} updated user ${user.username} to ${user.role} (${user.isActive ? "active" : "inactive"})`
+      );
       sendJson(response, 200, { ok: true, user });
       return;
     }
@@ -2501,6 +2657,9 @@ const server = createServer(async (request, response) => {
         sendJson(response, 401, { error: "Unauthorized" });
         return;
       }
+      if (!requirePermission(response, authContext, "resetPasswords")) {
+        return;
+      }
 
       const username = decodeURIComponent(url.split("/")[4] || "");
       const rawBody = JSON.parse((await readBody(request)).toString("utf8") || "{}") as {
@@ -2508,6 +2667,9 @@ const server = createServer(async (request, response) => {
       };
 
       const user = await dashboardAuthStore!.setUserPassword(username, rawBody.password || "");
+      await logDashboardAudit(
+        `${authContext.currentUser?.username || "unknown"} reset password for ${user.username}`
+      );
       sendJson(response, 200, { ok: true, user });
       return;
     }
@@ -2528,6 +2690,7 @@ const server = createServer(async (request, response) => {
         currentPassword: rawBody.currentPassword || "",
         newPassword: rawBody.newPassword || "",
       });
+      await logDashboardAudit(`${authContext.currentUser.username} changed own password`);
       sendJson(response, 200, { ok: true, user });
       return;
     }
@@ -2568,11 +2731,28 @@ const server = createServer(async (request, response) => {
     }
 
     if (url.startsWith("/api/")) {
+      const method = request.method || "GET";
+
+      if ((url === "/api/orchestrator/run" || url.startsWith("/api/orchestrator/run?")) && !hasPermission(authContext, "runComposer")) {
+        sendJson(response, 403, { error: "Forbidden" });
+        return;
+      }
+
+      if (((url === "/api/tasks" && method === "POST") || (url.startsWith("/api/tasks/") && method === "PATCH")) && !hasPermission(authContext, "manageTasks")) {
+        sendJson(response, 403, { error: "Forbidden" });
+        return;
+      }
+
+      if (url.startsWith("/api/logs") && !hasPermission(authContext, "viewLogs")) {
+        sendJson(response, 403, { error: "Forbidden" });
+        return;
+      }
+
       const body =
-        request.method === "GET" || request.method === "HEAD"
+        method === "GET" || method === "HEAD"
           ? undefined
           : new Uint8Array(await readBody(request));
-      const proxied = await proxyRequest(url, request.method || "GET", body);
+      const proxied = await proxyRequest(url, method, body);
 
       response.writeHead(proxied.status, {
         "Content-Type": proxied.headers.get("content-type") || "application/json",
