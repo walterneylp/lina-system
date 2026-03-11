@@ -2,12 +2,14 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { LinaEnv } from "../config/env";
 import { MemoryManager } from "../core/memory/memory-manager";
 import { LinaOrchestrator } from "../core/orchestrator/orchestrator";
+import { ProviderFactory } from "../core/providers/provider-factory";
 import { SkillLoader } from "../core/skills/skill-loader";
 
 type HttpServerDependencies = {
   env: LinaEnv;
   memoryManager: MemoryManager;
   orchestrator: LinaOrchestrator;
+  providerFactory: ProviderFactory;
   skillLoader: SkillLoader;
 };
 
@@ -43,6 +45,7 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
         const conversation = await dependencies.memoryManager.getConversation();
         const tasks = await dependencies.memoryManager.listTasks();
         const persistence = await dependencies.memoryManager.getHealth();
+        const providers = dependencies.providerFactory.inspect();
         response.writeHead(200, { "Content-Type": "application/json" });
         response.end(
           JSON.stringify({
@@ -53,8 +56,15 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
             conversationSize: conversation.length,
             tasksCount: tasks.length,
             persistence,
+            providers,
           })
         );
+        return;
+      }
+
+      if (method === "GET" && url === "/providers") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(dependencies.providerFactory.inspect()));
         return;
       }
 
@@ -75,7 +85,25 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
         }
 
         await dependencies.memoryManager.append("user", payload.text);
-        const result = await dependencies.orchestrator.handle({ text: payload.text });
+        const persistence = await dependencies.memoryManager.getHealth();
+        const runtimeContext = JSON.stringify(
+          {
+            app: dependencies.env.appName,
+            environment: dependencies.env.appEnv,
+            persistence,
+            providers: dependencies.providerFactory.inspect(),
+            availableSkills: dependencies.skillLoader.load().map((skill) => ({
+              name: skill.name,
+              description: skill.description,
+            })),
+          },
+          null,
+          2
+        );
+        const result = await dependencies.orchestrator.handle({
+          text: payload.text,
+          runtimeContext,
+        });
         await dependencies.memoryManager.append("assistant", result.answer);
 
         response.writeHead(200, { "Content-Type": "application/json" });

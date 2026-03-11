@@ -22,7 +22,12 @@ const agentLoop = new AgentLoop({
 export const bootstrapLiNa = async () => {
   const memoryStore = await createMemoryStoreWithFallback(env);
   const memoryManager = new MemoryManager(memoryStore);
-  const orchestrator = new LinaOrchestrator(agentLoop, skillLoader);
+  const orchestrator = new LinaOrchestrator(
+    agentLoop,
+    skillLoader,
+    env.appName,
+    env.appEnv
+  );
   const status = {
     appName: env.appName,
     environment: env.appEnv,
@@ -40,6 +45,7 @@ export const bootstrapLiNa = async () => {
     env,
     memoryManager,
     orchestrator,
+    providerFactory,
     skillLoader,
   });
 

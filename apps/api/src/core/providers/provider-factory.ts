@@ -43,6 +43,22 @@ export class ProviderFactory {
     return provider;
   }
 
+  public inspect(): Array<{
+    name: ProviderName;
+    enabled: boolean;
+    model: string;
+    isDefault: boolean;
+    isFallback: boolean;
+  }> {
+    const configured = this.registry.list();
+
+    return configured.map((provider) => ({
+      ...provider,
+      isDefault: provider.name === this.defaultProvider,
+      isFallback: this.fallbackOrder.includes(provider.name),
+    }));
+  }
+
   public async generate(params: LlmGenerationParams): Promise<LlmGenerationResult> {
     const preferred = params.provider || this.defaultProvider;
 
