@@ -245,6 +245,22 @@ const loginHtml = (options?: {
               <p class="muted">O cadastro inicial está indisponível agora. Se já houver um admin ativo, reative esse fluxo na seção <strong>Configurações</strong> do dashboard.</p>
             `
         }
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,0.08); margin:20px 0;" />
+        <h1 style="font-size:1.5rem;">Trocar Senha</h1>
+        <p>Se você já tem acesso, pode trocar a senha por aqui usando a senha atual.</p>
+        ${
+          dashboardAuthMode === "database"
+            ? `
+              <form method="POST" action="/change-password">
+                <input type="text" name="username" placeholder="Usuário" autocomplete="username" required />
+                <input type="password" name="currentPassword" placeholder="Senha atual" autocomplete="current-password" required />
+                <input type="password" name="newPassword" placeholder="Nova senha" autocomplete="new-password" required />
+                <input type="password" name="confirmPassword" placeholder="Confirmar nova senha" autocomplete="new-password" required />
+                <button type="submit">Trocar senha</button>
+              </form>
+            `
+            : `<p class="muted">A troca de senha pela tela de login está disponível apenas no modo com banco.</p>`
+        }
         ${options?.infoMessage ? `<div class="muted">${options.infoMessage}</div>` : ""}
       </section>
     </main>
@@ -788,6 +804,37 @@ const html = `<!DOCTYPE html>
         margin-bottom: 18px;
       }
 
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
+      .settings-card {
+        padding: 18px;
+        border-radius: 18px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+      }
+
+      .settings-card h3 {
+        margin: 0 0 8px;
+        font-size: 1rem;
+      }
+
+      .settings-card p {
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 0.88rem;
+        line-height: 1.6;
+      }
+
+      .settings-form {
+        display: grid;
+        gap: 12px;
+      }
+
       .composer-form textarea {
         min-height: 112px;
         resize: vertical;
@@ -977,6 +1024,10 @@ const html = `<!DOCTYPE html>
 
         .hero-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .settings-grid {
+          grid-template-columns: 1fr;
         }
       }
 
@@ -1315,8 +1366,77 @@ const html = `<!DOCTYPE html>
         <article class="panel section page-panel" data-view-panel="settings">
           <div class="section-head">
             <h2>Configurações</h2>
-            <p>Controle de autenticação do dashboard e estado do bootstrap do primeiro admin.</p>
+            <p>Controle de autenticação do dashboard, usuários, IDs do Telegram e troca de senha.</p>
           </div>
+          <div class="settings-grid">
+            <section class="settings-card">
+              <h3>Criar usuário</h3>
+              <p>Cadastre novos acessos do dashboard e já associe IDs do Telegram permitidos para esse usuário.</p>
+              <form class="settings-form" id="create-user-form">
+                <label>
+                  Usuário
+                  <input id="create-user-username" class="control" type="text" placeholder="ex: operador.lina" required />
+                </label>
+                <label>
+                  Senha inicial
+                  <input id="create-user-password" class="control" type="password" placeholder="mínimo 8 caracteres" required />
+                </label>
+                <label>
+                  IDs do Telegram
+                  <input id="create-user-telegram-ids" class="control" type="text" placeholder="165169460, 123456789" />
+                </label>
+                <button class="task-action" type="submit">Criar usuário</button>
+              </form>
+            </section>
+
+            <section class="settings-card">
+              <h3>Gerenciar usuário</h3>
+              <p>Edite IDs do Telegram, ative ou desative usuários existentes e, se necessário, defina uma nova senha.</p>
+              <form class="settings-form" id="manage-user-form">
+                <label>
+                  Usuário
+                  <select id="manage-user-select" class="control"></select>
+                </label>
+                <label>
+                  IDs do Telegram
+                  <input id="manage-user-telegram-ids" class="control" type="text" placeholder="165169460, 123456789" />
+                </label>
+                <label>
+                  Situação
+                  <select id="manage-user-active" class="control">
+                    <option value="true">ativo</option>
+                    <option value="false">inativo</option>
+                  </select>
+                </label>
+                <label>
+                  Nova senha opcional
+                  <input id="manage-user-password" class="control" type="password" placeholder="preencha só se quiser trocar" />
+                </label>
+                <button class="task-action" type="submit">Salvar usuário</button>
+              </form>
+            </section>
+          </div>
+
+          <section class="settings-card" style="margin-bottom:18px;">
+            <h3>Trocar minha senha</h3>
+            <p>Você pode trocar sua senha tanto aqui quanto na tela de login. Esta ação usa a senha atual para confirmação.</p>
+            <form class="settings-form" id="self-password-form">
+              <label>
+                Senha atual
+                <input id="self-current-password" class="control" type="password" required />
+              </label>
+              <label>
+                Nova senha
+                <input id="self-new-password" class="control" type="password" required />
+              </label>
+              <label>
+                Confirmar nova senha
+                <input id="self-confirm-password" class="control" type="password" required />
+              </label>
+              <button class="task-action" type="submit">Trocar senha</button>
+            </form>
+          </section>
+
           <div class="task-actions">
             <button class="task-action" id="bootstrap-toggle-button" type="button">Alternar bootstrap</button>
           </div>
@@ -1338,6 +1458,8 @@ const html = `<!DOCTYPE html>
         logs: "/api/logs?limit=30",
         authState: "/dashboard/auth/state",
         authBootstrapToggle: "/dashboard/auth/bootstrap-toggle",
+        authUsers: "/dashboard/auth/users",
+        authMePassword: "/dashboard/auth/me/password",
       };
 
       const dashboardState = {
@@ -1377,6 +1499,12 @@ const html = `<!DOCTYPE html>
         const date = new Date(value);
         return Number.isNaN(date.getTime()) ? safeText(value) : date.toLocaleString("pt-BR");
       };
+
+      const parseTelegramIds = (value) =>
+        String(value || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
 
       const applyTheme = () => {
         const theme = dashboardState.theme === "light" ? "light" : "dark";
@@ -1699,10 +1827,14 @@ const html = `<!DOCTYPE html>
         const feed = document.getElementById("settings-feed");
         const pill = document.getElementById("current-user-pill");
         const toggleButton = document.getElementById("bootstrap-toggle-button");
+        const manageUserSelect = document.getElementById("manage-user-select");
+        const manageUserTelegramIds = document.getElementById("manage-user-telegram-ids");
+        const manageUserActive = document.getElementById("manage-user-active");
 
         if (!authPayload) {
           pill.textContent = "Sessão sem contexto";
           toggleButton.disabled = true;
+          manageUserSelect.innerHTML = '<option value="">Sem usuários</option>';
           renderEmpty(feed, "Autenticação do dashboard indisponível.");
           return;
         }
@@ -1717,6 +1849,7 @@ const html = `<!DOCTYPE html>
 
         if (authPayload.mode !== "database") {
           toggleButton.disabled = true;
+          manageUserSelect.innerHTML = '<option value="">Modo legado</option>';
           renderEmpty(feed, "O dashboard está em modo legado de token. O gerenciamento de usuários no banco só aparece no modo database.");
           return;
         }
@@ -1725,6 +1858,34 @@ const html = `<!DOCTYPE html>
         toggleButton.textContent = authState?.allowAdminBootstrap
           ? "Desabilitar bootstrap admin"
           : "Habilitar bootstrap admin";
+
+        const currentManagedUsername = manageUserSelect.value;
+        manageUserSelect.innerHTML = users.length
+          ? users
+              .map(
+                (user) =>
+                  \`<option value="\${escapeHtml(user.username)}">\${escapeHtml(user.username)} (\${user.isActive ? "ativo" : "inativo"})</option>\`
+              )
+              .join("")
+          : '<option value="">Sem usuários</option>';
+
+        if (currentManagedUsername && users.some((user) => user.username === currentManagedUsername)) {
+          manageUserSelect.value = currentManagedUsername;
+        }
+
+        const selectedUser =
+          users.find((user) => user.username === manageUserSelect.value) ||
+          users[0] ||
+          null;
+
+        if (selectedUser) {
+          manageUserSelect.value = selectedUser.username;
+          manageUserTelegramIds.value = (selectedUser.telegramUserIds || []).join(", ");
+          manageUserActive.value = selectedUser.isActive ? "true" : "false";
+        } else {
+          manageUserTelegramIds.value = "";
+          manageUserActive.value = "true";
+        }
 
         const userCards = users.length
           ? users.map((user) => \`
@@ -1735,6 +1896,7 @@ const html = `<!DOCTYPE html>
                 </div>
                 <div class="feed-title">\${escapeHtml(user.username)}</div>
                 <div class="feed-body">role: \${escapeHtml(user.role)} | último login: \${escapeHtml(user.lastLoginAt ? formatTime(user.lastLoginAt) : "nunca")}</div>
+                <div class="feed-submeta">telegram ids: \${escapeHtml((user.telegramUserIds || []).join(", ") || "nenhum")}</div>
               </article>
             \`).join("")
           : '<div class="empty">Nenhum usuário cadastrado ainda.</div>';
@@ -1886,6 +2048,86 @@ const html = `<!DOCTYPE html>
           await refresh();
         } catch (error) {
           document.getElementById("last-updated").textContent = error instanceof Error ? error.message : "Falha ao alterar bootstrap";
+        }
+      });
+      document.getElementById("manage-user-select").addEventListener("change", () => {
+        renderSettings(dashboardState.auth);
+      });
+      document.getElementById("create-user-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const usernameInput = document.getElementById("create-user-username");
+        const passwordInput = document.getElementById("create-user-password");
+        const telegramIdsInput = document.getElementById("create-user-telegram-ids");
+
+        try {
+          await sendJson(endpoints.authUsers, "POST", {
+            username: usernameInput.value.trim(),
+            password: passwordInput.value,
+            telegramUserIds: parseTelegramIds(telegramIdsInput.value),
+          });
+          usernameInput.value = "";
+          passwordInput.value = "";
+          telegramIdsInput.value = "";
+          await refresh();
+        } catch (error) {
+          document.getElementById("last-updated").textContent = error instanceof Error ? error.message : "Falha ao criar usuário";
+        }
+      });
+      document.getElementById("manage-user-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const userSelect = document.getElementById("manage-user-select");
+        const telegramIdsInput = document.getElementById("manage-user-telegram-ids");
+        const activeSelect = document.getElementById("manage-user-active");
+        const passwordInput = document.getElementById("manage-user-password");
+        const username = userSelect.value;
+
+        if (!username) {
+          return;
+        }
+
+        try {
+          await sendJson(\`\${endpoints.authUsers}/\${encodeURIComponent(username)}\`, "PATCH", {
+            telegramUserIds: parseTelegramIds(telegramIdsInput.value),
+            isActive: activeSelect.value === "true",
+          });
+
+          if (passwordInput.value.trim()) {
+            await sendJson(\`\${endpoints.authUsers}/\${encodeURIComponent(username)}/password\`, "POST", {
+              password: passwordInput.value,
+            });
+          }
+
+          passwordInput.value = "";
+          await refresh();
+        } catch (error) {
+          document.getElementById("last-updated").textContent = error instanceof Error ? error.message : "Falha ao atualizar usuário";
+        }
+      });
+      document.getElementById("self-password-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const currentPasswordInput = document.getElementById("self-current-password");
+        const newPasswordInput = document.getElementById("self-new-password");
+        const confirmPasswordInput = document.getElementById("self-confirm-password");
+
+        if (newPasswordInput.value !== confirmPasswordInput.value) {
+          document.getElementById("last-updated").textContent = "A confirmação de senha não confere.";
+          return;
+        }
+
+        try {
+          await sendJson(endpoints.authMePassword, "POST", {
+            currentPassword: currentPasswordInput.value,
+            newPassword: newPasswordInput.value,
+          });
+          currentPasswordInput.value = "";
+          newPasswordInput.value = "";
+          confirmPasswordInput.value = "";
+          await refresh();
+        } catch (error) {
+          document.getElementById("last-updated").textContent = error instanceof Error ? error.message : "Falha ao trocar senha";
         }
       });
       document.getElementById("task-form").addEventListener("submit", async (event) => {
@@ -2117,6 +2359,55 @@ const server = createServer(async (request, response) => {
       }
     }
 
+    if (url === "/change-password" && request.method === "POST") {
+      if (dashboardAuthMode !== "database") {
+        sendJson(response, 404, { error: "Password change is only available with database auth." });
+        return;
+      }
+
+      const payload = new URLSearchParams((await readBody(request)).toString("utf8"));
+      const username = payload.get("username") || "";
+      const currentPassword = payload.get("currentPassword") || "";
+      const newPassword = payload.get("newPassword") || "";
+      const confirmPassword = payload.get("confirmPassword") || "";
+
+      if (newPassword !== confirmPassword) {
+        response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+        response.end(
+          loginHtml({
+            errorMessage: "A confirmação de senha não confere.",
+            authState: await dashboardAuthStore!.getAuthState().catch(() => null),
+          })
+        );
+        return;
+      }
+
+      try {
+        await dashboardAuthStore!.changePasswordWithCurrentPassword({
+          username,
+          currentPassword,
+          newPassword,
+        });
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        response.end(
+          loginHtml({
+            authState: await dashboardAuthStore!.getAuthState().catch(() => null),
+            infoMessage: "Senha atualizada com sucesso. Faça login com a nova senha.",
+          })
+        );
+        return;
+      } catch (error) {
+        response.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+        response.end(
+          loginHtml({
+            errorMessage: error instanceof Error ? error.message : "Falha ao trocar a senha.",
+            authState: await dashboardAuthStore!.getAuthState().catch(() => null),
+          })
+        );
+        return;
+      }
+    }
+
     if (url === "/dashboard/auth/state" && request.method === "GET") {
       if (authContext.authError) {
         sendJson(response, 503, { error: authContext.authError });
@@ -2161,6 +2452,83 @@ const server = createServer(async (request, response) => {
         ok: true,
         authState: await dashboardAuthStore!.getAuthState(),
       });
+      return;
+    }
+
+    if (url === "/dashboard/auth/users" && request.method === "POST") {
+      if (!authContext.isAuthenticated || dashboardAuthMode !== "database") {
+        sendJson(response, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      const rawBody = JSON.parse((await readBody(request)).toString("utf8") || "{}") as {
+        username?: string;
+        password?: string;
+        telegramUserIds?: string[];
+      };
+
+      const user = await dashboardAuthStore!.createUser({
+        username: rawBody.username || "",
+        password: rawBody.password || "",
+        telegramUserIds: rawBody.telegramUserIds || [],
+      });
+      sendJson(response, 201, { ok: true, user });
+      return;
+    }
+
+    if (url.startsWith("/dashboard/auth/users/") && request.method === "PATCH") {
+      if (!authContext.isAuthenticated || dashboardAuthMode !== "database") {
+        sendJson(response, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      const username = decodeURIComponent(url.split("/")[4] || "");
+      const rawBody = JSON.parse((await readBody(request)).toString("utf8") || "{}") as {
+        isActive?: boolean;
+        telegramUserIds?: string[];
+      };
+
+      const user = await dashboardAuthStore!.updateUser(username, {
+        isActive: rawBody.isActive,
+        telegramUserIds: rawBody.telegramUserIds,
+      });
+      sendJson(response, 200, { ok: true, user });
+      return;
+    }
+
+    if (url.startsWith("/dashboard/auth/users/") && url.endsWith("/password") && request.method === "POST") {
+      if (!authContext.isAuthenticated || dashboardAuthMode !== "database") {
+        sendJson(response, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      const username = decodeURIComponent(url.split("/")[4] || "");
+      const rawBody = JSON.parse((await readBody(request)).toString("utf8") || "{}") as {
+        password?: string;
+      };
+
+      const user = await dashboardAuthStore!.setUserPassword(username, rawBody.password || "");
+      sendJson(response, 200, { ok: true, user });
+      return;
+    }
+
+    if (url === "/dashboard/auth/me/password" && request.method === "POST") {
+      if (!authContext.isAuthenticated || dashboardAuthMode !== "database" || !authContext.currentUser) {
+        sendJson(response, 401, { error: "Unauthorized" });
+        return;
+      }
+
+      const rawBody = JSON.parse((await readBody(request)).toString("utf8") || "{}") as {
+        currentPassword?: string;
+        newPassword?: string;
+      };
+
+      const user = await dashboardAuthStore!.changePasswordWithCurrentPassword({
+        username: authContext.currentUser.username,
+        currentPassword: rawBody.currentPassword || "",
+        newPassword: rawBody.newPassword || "",
+      });
+      sendJson(response, 200, { ok: true, user });
       return;
     }
 

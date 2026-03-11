@@ -256,7 +256,7 @@ export class TelegramCommandService {
       `Usuários do dashboard (${users.length})`,
       ...users.map(
         (user, index) =>
-          `${index + 1}. ${user.username} · ${user.role} · ${user.isActive ? "ativo" : "inativo"}`
+          `${index + 1}. ${user.username} · ${user.role} · ${user.isActive ? "ativo" : "inativo"} · tg: ${(user.telegramUserIds || []).join(", ") || "nenhum"}`
       ),
     ].join("\n");
   }
@@ -280,6 +280,7 @@ export class TelegramCommandService {
         `Usuário ${user.username}`,
         `- role: ${user.role}`,
         `- ativo: ${user.isActive ? "sim" : "nao"}`,
+        `- telegram ids: ${(user.telegramUserIds || []).join(", ") || "nenhum"}`,
         `- criado em: ${user.createdAt}`,
         `- ultimo login: ${user.lastLoginAt || "nunca"}`,
       ].join("\n");

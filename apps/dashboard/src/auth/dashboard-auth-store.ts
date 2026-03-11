@@ -11,6 +11,7 @@ export type DashboardAuthUser = {
   username: string;
   role: string;
   isActive: boolean;
+  telegramUserIds: string[];
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string | null;
@@ -28,7 +29,7 @@ type DashboardSession = {
   expiresAt: string;
 };
 
-type DashboardUserRecord = Record<string, string | boolean | null>;
+type DashboardUserRecord = Record<string, string | boolean | string[] | null>;
 
 type DashboardSettingsRow = {
   key: string;
@@ -63,10 +64,20 @@ export class DashboardAuthStore {
   }
 
   public async listUsers(): Promise<DashboardAuthUser[]> {
-    const { data, error } = await this.client
+    let data;
+    let error;
+
+    ({ data, error } = await this.client
       .from("dashboard_users")
-      .select("id, username, role, is_active, created_at, updated_at, last_login_at")
-      .order("created_at", { ascending: true });
+      .select("id, username, role, is_active, telegram_user_ids, created_at, updated_at, last_login_at")
+      .order("created_at", { ascending: true }));
+
+    if (error?.message?.includes("telegram_user_ids")) {
+      ({ data, error } = await this.client
+        .from("dashboard_users")
+        .select("id, username, role, is_active, created_at, updated_at, last_login_at")
+        .order("created_at", { ascending: true }));
+    }
 
     if (error) {
       throw new Error(`Failed to list dashboard users: ${error.message}`);
@@ -122,9 +133,10 @@ export class DashboardAuthStore {
         password_hash: this.hashPassword(password),
         role: "admin",
         is_active: true,
+        telegram_user_ids: [],
         updated_at: new Date().toISOString(),
       })
-      .select("id, username, role, is_active, created_at, updated_at, last_login_at")
+      .select("id, username, role, is_active, telegram_user_ids, created_at, updated_at, last_login_at")
       .single();
 
     if (error || !data) {
@@ -140,13 +152,26 @@ export class DashboardAuthStore {
       return null;
     }
 
-    const { data, error } = await this.client
+    let data;
+    let error;
+
+    ({ data, error } = await this.client
       .from("dashboard_sessions")
-      .select("id, user_id, expires_at, revoked_at, dashboard_users(id, username, role, is_active, created_at, updated_at, last_login_at)")
+      .select("id, user_id, expires_at, revoked_at, dashboard_users(id, username, role, is_active, telegram_user_ids, created_at, updated_at, last_login_at)")
       .eq("session_hash", this.hashSessionToken(token))
       .is("revoked_at", null)
       .gt("expires_at", new Date().toISOString())
-      .maybeSingle();
+      .maybeSingle());
+
+    if (error?.message?.includes("telegram_user_ids")) {
+      ({ data, error } = await this.client
+        .from("dashboard_sessions")
+        .select("id, user_id, expires_at, revoked_at, dashboard_users(id, username, role, is_active, created_at, updated_at, last_login_at)")
+        .eq("session_hash", this.hashSessionToken(token))
+        .is("revoked_at", null)
+        .gt("expires_at", new Date().toISOString())
+        .maybeSingle());
+    }
 
     if (error || !data) {
       return null;
@@ -206,7 +231,7 @@ export class DashboardAuthStore {
         updated_at: new Date().toISOString(),
       })
       .eq("id", String(userRecord.id || ""))
-      .select("id, username, role, is_active, created_at, updated_at, last_login_at")
+      .select("id, username, role, is_active, telegram_user_ids, created_at, updated_at, last_login_at")
       .single();
 
     if (error || !data) {
@@ -232,11 +257,122 @@ export class DashboardAuthStore {
         updated_at: new Date().toISOString(),
       })
       .eq("id", String(userRecord.id || ""))
-      .select("id, username, role, is_active, created_at, updated_at, last_login_at")
+      .select("id, username, role, is_active, telegram_user_ids, created_at, updated_at, last_login_at")
       .single();
 
     if (error || !data) {
       throw new Error(`Falha ao atualizar a senha do usuário: ${error?.message || "erro desconhecido"}`);
+    }
+
+    return this.mapUser(data as DashboardUserRecord);
+  }
+
+  public async createUser(input: {
+    username: string;
+    password: string;
+    role?: string;
+    telegramUserIds?: string[];
+  }): Promise<DashboardAuthUser> {
+    this.validateCredentials(input.username, input.password);
+
+    const existingUser = await this.getUserByUsername(input.username);
+    if (existingUser) {
+      throw new Error("Esse nome de usuário já está em uso.");
+    }
+
+    const { data, error } = await this.client
+      .from("dashboard_users")
+      .insert({
+        id: randomUUID(),
+        username: input.username.trim(),
+        password_hash: this.hashPassword(input.password),
+        role: input.role || "admin",
+        is_active: true,
+        telegram_user_ids: this.normalizeTelegramUserIds(input.telegramUserIds || []),
+        updated_at: new Date().toISOString(),
+      })
+      .select("id, username, role, is_active, telegram_user_ids, created_at, updated_at, last_login_at")
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Falha ao criar usuário do dashboard: ${error?.message || "erro desconhecido"}`);
+    }
+
+    return this.mapUser(data as DashboardUserRecord);
+  }
+
+  public async updateUser(username: string, updates: {
+    role?: string;
+    isActive?: boolean;
+    telegramUserIds?: string[];
+  }): Promise<DashboardAuthUser> {
+    const userRecord = await this.getUserByUsername(username);
+
+    if (!userRecord) {
+      throw new Error("Usuário não encontrado.");
+    }
+
+    const payload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (updates.role) {
+      payload.role = updates.role;
+    }
+
+    if (typeof updates.isActive === "boolean") {
+      payload.is_active = updates.isActive;
+    }
+
+    if (updates.telegramUserIds) {
+      payload.telegram_user_ids = this.normalizeTelegramUserIds(updates.telegramUserIds);
+    }
+
+    const { data, error } = await this.client
+      .from("dashboard_users")
+      .update(payload)
+      .eq("id", String(userRecord.id || ""))
+      .select("id, username, role, is_active, telegram_user_ids, created_at, updated_at, last_login_at")
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Falha ao atualizar o usuário do dashboard: ${error?.message || "erro desconhecido"}`);
+    }
+
+    return this.mapUser(data as DashboardUserRecord);
+  }
+
+  public async changePasswordWithCurrentPassword(input: {
+    username: string;
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<DashboardAuthUser> {
+    this.validateCredentials(input.username, input.newPassword);
+
+    const userRecord = await this.getUserByUsername(input.username);
+
+    if (!userRecord) {
+      throw new Error("Usuário ou senha atual inválidos.");
+    }
+
+    const rawPasswordHash = String(userRecord.password_hash || "");
+
+    if (!this.verifyPassword(input.currentPassword, rawPasswordHash)) {
+      throw new Error("Usuário ou senha atual inválidos.");
+    }
+
+    const { data, error } = await this.client
+      .from("dashboard_users")
+      .update({
+        password_hash: this.hashPassword(input.newPassword),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", String(userRecord.id || ""))
+      .select("id, username, role, is_active, telegram_user_ids, created_at, updated_at, last_login_at")
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Falha ao trocar a senha: ${error?.message || "erro desconhecido"}`);
     }
 
     return this.mapUser(data as DashboardUserRecord);
@@ -294,11 +430,22 @@ export class DashboardAuthStore {
   }
 
   private async getUserByUsername(username: string): Promise<DashboardUserRecord | null> {
-    const { data, error } = await this.client
+    let data;
+    let error;
+
+    ({ data, error } = await this.client
       .from("dashboard_users")
-      .select("id, username, role, is_active, created_at, updated_at, last_login_at, password_hash")
+      .select("id, username, role, is_active, telegram_user_ids, created_at, updated_at, last_login_at, password_hash")
       .eq("username", username.trim())
-      .maybeSingle();
+      .maybeSingle());
+
+    if (error?.message?.includes("telegram_user_ids")) {
+      ({ data, error } = await this.client
+        .from("dashboard_users")
+        .select("id, username, role, is_active, created_at, updated_at, last_login_at, password_hash")
+        .eq("username", username.trim())
+        .maybeSingle());
+    }
 
     if (error || !data) {
       return null;
@@ -350,9 +497,22 @@ export class DashboardAuthStore {
       username: String(item.username || ""),
       role: String(item.role || "admin"),
       isActive: item.is_active === true,
+      telegramUserIds: Array.isArray(item.telegram_user_ids)
+        ? item.telegram_user_ids.map((value) => String(value))
+        : [],
       createdAt: String(item.created_at || new Date().toISOString()),
       updatedAt: String(item.updated_at || new Date().toISOString()),
       lastLoginAt: item.last_login_at ? String(item.last_login_at) : null,
     };
+  }
+
+  private normalizeTelegramUserIds(values: string[]): string[] {
+    return Array.from(
+      new Set(
+        values
+          .map((value) => value.trim())
+          .filter(Boolean)
+      )
+    );
   }
 }
