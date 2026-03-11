@@ -88,6 +88,19 @@ export class DashboardAuthStore {
     );
   }
 
+  public async listAuthorizedTelegramUserIds(): Promise<string[]> {
+    const users = await this.listUsers();
+    return Array.from(
+      new Set(
+        users
+          .filter((user) => user.isActive)
+          .flatMap((user) => user.telegramUserIds || [])
+          .map((value) => value.trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
   public async authenticate(username: string, password: string): Promise<DashboardSession> {
     const userRecord = await this.getUserByUsername(username);
 

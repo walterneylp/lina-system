@@ -8,6 +8,7 @@ import { SkillLoader } from "./core/skills/skill-loader";
 import { RuntimeLock } from "./runtime/runtime-lock";
 import { startHttpServer } from "./server/http-server";
 import { AudioPreprocessor } from "./telegram/audio-preprocessor";
+import { TelegramAccessControl } from "./telegram/telegram-access-control";
 import { TelegramClient } from "./telegram/telegram-client";
 import { GroqAudioTranscriber } from "./telegram/groq-audio-transcriber";
 import { TelegramInputHandler } from "./telegram/telegram-input-handler";
@@ -66,6 +67,7 @@ export const bootstrapLiNa = async () => {
   if (env.telegramBotToken) {
     const telegramClient = new TelegramClient({ token: env.telegramBotToken });
     const audioPreprocessor = new AudioPreprocessor();
+    const accessControl = new TelegramAccessControl({ env });
     const audioTranscriber = new GroqAudioTranscriber({
       apiKey: process.env.GROQ_API_KEYS?.split(",").map((value) => value.trim()).filter(Boolean)[0],
       model: env.groqTranscriptionModel,
@@ -94,6 +96,7 @@ export const bootstrapLiNa = async () => {
       audioTranscriber,
       audioPreprocessor,
       commandService,
+      accessControl,
     });
 
     telegramRunner = new TelegramPollingRunner({

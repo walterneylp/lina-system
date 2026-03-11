@@ -2,6 +2,7 @@ import { LinaOrchestrator } from "../core/orchestrator/orchestrator";
 import { ConversationMessageMetadata } from "../core/memory/memory.types";
 import { MemoryManager } from "../core/memory/memory-manager";
 import { AudioPreprocessor } from "./audio-preprocessor";
+import { TelegramAccessControl } from "./telegram-access-control";
 import { TelegramClient } from "./telegram-client";
 import { GroqAudioTranscriber } from "./groq-audio-transcriber";
 import { TelegramCommandService } from "./telegram-command-service";
@@ -17,6 +18,7 @@ type TelegramInputHandlerOptions = {
   audioTranscriber: GroqAudioTranscriber;
   audioPreprocessor: AudioPreprocessor;
   commandService: TelegramCommandService;
+  accessControl: TelegramAccessControl;
 };
 
 export class TelegramInputHandler {
@@ -30,7 +32,21 @@ export class TelegramInputHandler {
     const audio = update.message?.audio;
     const metadata = this.buildMetadata(update, voice ? "voice" : audio ? "audio" : "text");
 
-    if (!chatId || !this.isAllowed(userId)) {
+    if (!chatId) {
+      return;
+    }
+
+    const isAllowed = await this.options.accessControl.isAllowed(userId);
+
+    if (!isAllowed) {
+      await this.options.memoryManager.log(
+        "warn",
+        `[telegram-access-denied] ${metadata?.username || metadata?.userId || "unknown"}`
+      );
+      await this.options.outputHandler.sendText(
+        chatId,
+        "Seu usuario do Telegram ainda nao esta autorizado para operar a LiNa. Vincule seu ID no dashboard."
+      );
       return;
     }
 
@@ -263,14 +279,6 @@ export class TelegramInputHandler {
       default:
         return "ogg";
     }
-  }
-
-  private isAllowed(userId: string): boolean {
-    if (this.options.allowedUserIds.length === 0) {
-      return true;
-    }
-
-    return this.options.allowedUserIds.includes(userId);
   }
 
   private buildMetadata(
