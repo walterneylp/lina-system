@@ -10,10 +10,12 @@ import { TelegramClient } from "./telegram/telegram-client";
 import { TelegramInputHandler } from "./telegram/telegram-input-handler";
 import { TelegramOutputHandler } from "./telegram/telegram-output-handler";
 import { TelegramPollingRunner } from "./telegram/telegram-polling-runner";
+import { TelegramRuntime } from "./telegram/telegram-runtime";
 
 const env = loadEnv();
 const providerFactory = new ProviderFactory();
 const skillLoader = new SkillLoader(env.skillsDirectory);
+const telegramRuntime = new TelegramRuntime();
 const agentLoop = new AgentLoop({
   providerFactory,
   maxIterations: env.maxIterations,
@@ -47,12 +49,19 @@ export const bootstrapLiNa = async () => {
     orchestrator,
     providerFactory,
     skillLoader,
+    telegramRuntime,
   });
 
   let telegramRunner: TelegramPollingRunner | null = null;
 
   if (env.telegramBotToken) {
     const telegramClient = new TelegramClient({ token: env.telegramBotToken });
+    telegramRuntime.setStatus({
+      configured: true,
+      authenticated: false,
+      pollingEnabled: false,
+    });
+    const identity = await telegramClient.getMe();
     const outputHandler = new TelegramOutputHandler(telegramClient);
     const inputHandler = new TelegramInputHandler({
       allowedUserIds: env.telegramAllowedUserIds,
@@ -68,10 +77,23 @@ export const bootstrapLiNa = async () => {
       pollingIntervalMs: env.telegramPollingInterval,
     });
     telegramRunner.start();
+    telegramRuntime.setStatus({
+      configured: true,
+      authenticated: true,
+      pollingEnabled: true,
+      identity,
+    });
     console.log("[LiNa] Telegram polling enabled");
+  } else {
+    telegramRuntime.setStatus({
+      configured: false,
+      authenticated: false,
+      pollingEnabled: false,
+      details: "TELEGRAM_BOT_TOKEN not configured",
+    });
   }
 
-  return { env, memoryManager, orchestrator, httpServer, telegramRunner };
+  return { env, memoryManager, orchestrator, httpServer, telegramRunner, telegramRuntime };
 };
 
 if (process.argv[1]?.endsWith("/apps/api/src/index.ts")) {

@@ -24,3 +24,17 @@ export type TelegramUpdate = {
     text?: string;
   };
 };
+
+export type TelegramBotIdentity = {
+  id: number;
+  username?: string;
+  first_name: string;
+};
+
+export type TelegramRuntimeStatus = {
+  configured: boolean;
+  authenticated: boolean;
+  pollingEnabled: boolean;
+  identity?: TelegramBotIdentity;
+  details?: string;
+};

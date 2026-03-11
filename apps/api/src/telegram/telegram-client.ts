@@ -1,4 +1,8 @@
-import { TelegramOutboundMessage, TelegramUpdate } from "./telegram.types";
+import {
+  TelegramBotIdentity,
+  TelegramOutboundMessage,
+  TelegramUpdate,
+} from "./telegram.types";
 
 type TelegramClientOptions = {
   token: string;
@@ -21,6 +25,17 @@ export class TelegramClient {
     const response = await fetch(url);
     const payload = (await response.json()) as { result?: TelegramUpdate[] };
     return payload.result || [];
+  }
+
+  public async getMe(): Promise<TelegramBotIdentity> {
+    const response = await fetch(`${this.baseUrl}/getMe`);
+    const payload = (await response.json()) as { ok: boolean; result?: TelegramBotIdentity };
+
+    if (!payload.ok || !payload.result) {
+      throw new Error("Telegram getMe failed");
+    }
+
+    return payload.result;
   }
 
   public async sendChatAction(chatId: string, action: "typing" | "record_voice"): Promise<void> {

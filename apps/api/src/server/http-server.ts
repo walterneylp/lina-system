@@ -4,6 +4,7 @@ import { MemoryManager } from "../core/memory/memory-manager";
 import { LinaOrchestrator } from "../core/orchestrator/orchestrator";
 import { ProviderFactory } from "../core/providers/provider-factory";
 import { SkillLoader } from "../core/skills/skill-loader";
+import { TelegramRuntime } from "../telegram/telegram-runtime";
 
 type HttpServerDependencies = {
   env: LinaEnv;
@@ -11,6 +12,7 @@ type HttpServerDependencies = {
   orchestrator: LinaOrchestrator;
   providerFactory: ProviderFactory;
   skillLoader: SkillLoader;
+  telegramRuntime: TelegramRuntime;
 };
 
 const readBody = async (request: IncomingMessage): Promise<string> => {
@@ -30,12 +32,14 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
 
       if (method === "GET" && url === "/health") {
         const persistence = await dependencies.memoryManager.getHealth();
+        const telegram = dependencies.telegramRuntime.getStatus();
         response.writeHead(200, { "Content-Type": "application/json" });
         response.end(
           JSON.stringify({
             status: persistence.connected ? "ok" : "degraded",
             app: dependencies.env.appName,
             persistence,
+            telegram,
           })
         );
         return;
@@ -46,6 +50,7 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
         const tasks = await dependencies.memoryManager.listTasks();
         const persistence = await dependencies.memoryManager.getHealth();
         const providers = dependencies.providerFactory.inspect();
+        const telegram = dependencies.telegramRuntime.getStatus();
         response.writeHead(200, { "Content-Type": "application/json" });
         response.end(
           JSON.stringify({
@@ -57,6 +62,7 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
             tasksCount: tasks.length,
             persistence,
             providers,
+            telegram,
           })
         );
         return;
