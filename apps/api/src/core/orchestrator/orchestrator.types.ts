@@ -5,6 +5,8 @@ export type OrchestratorResponse = {
   skillName?: string | null;
   agentName?: string | null;
   subAgentName?: string | null;
+  delegationMode?: string | null;
+  delegationSummary?: string | null;
   availableSkills: Array<{
     name: string;
     description: string;

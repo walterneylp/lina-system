@@ -76,6 +76,11 @@ export class LocalMemoryStore implements MemoryStore {
       title: task.title,
       status: task.status,
       assignedAgent: task.assignedAgent || null,
+      targetAgent: task.targetAgent || null,
+      targetSubAgent: task.targetSubAgent || null,
+      targetSkill: task.targetSkill || null,
+      delegationMode: task.delegationMode || null,
+      delegatedBy: task.delegatedBy || null,
       createdAt: new Date().toISOString(),
     };
     state.tasks.push(createdTask);
@@ -102,6 +107,20 @@ export class LocalMemoryStore implements MemoryStore {
       status: updates.status ?? currentTask.status,
       assignedAgent:
         updates.assignedAgent === undefined ? currentTask.assignedAgent || null : updates.assignedAgent,
+      targetAgent:
+        updates.targetAgent === undefined ? currentTask.targetAgent || null : updates.targetAgent,
+      targetSubAgent:
+        updates.targetSubAgent === undefined
+          ? currentTask.targetSubAgent || null
+          : updates.targetSubAgent,
+      targetSkill:
+        updates.targetSkill === undefined ? currentTask.targetSkill || null : updates.targetSkill,
+      delegationMode:
+        updates.delegationMode === undefined
+          ? currentTask.delegationMode || null
+          : updates.delegationMode,
+      delegatedBy:
+        updates.delegatedBy === undefined ? currentTask.delegatedBy || null : updates.delegatedBy,
     };
 
     state.tasks[taskIndex] = updatedTask;
@@ -117,6 +136,10 @@ export class LocalMemoryStore implements MemoryStore {
       provider: execution.provider || null,
       status: execution.status,
       resultSummary: execution.resultSummary || null,
+      selectedAgent: execution.selectedAgent || null,
+      selectedSubAgent: execution.selectedSubAgent || null,
+      selectedSkill: execution.selectedSkill || null,
+      delegationSummary: execution.delegationSummary || null,
       createdAt: new Date().toISOString(),
     };
     state.executions.push(createdExecution);
@@ -139,10 +162,27 @@ export class LocalMemoryStore implements MemoryStore {
     const currentExecution = state.executions[executionIndex];
     const updatedExecution: LinaExecutionRecord = {
       ...currentExecution,
+      taskId: updates.taskId === undefined ? currentExecution.taskId || null : updates.taskId,
       provider: updates.provider === undefined ? currentExecution.provider || null : updates.provider,
       status: updates.status ?? currentExecution.status,
       resultSummary:
         updates.resultSummary === undefined ? currentExecution.resultSummary || null : updates.resultSummary,
+      selectedAgent:
+        updates.selectedAgent === undefined
+          ? currentExecution.selectedAgent || null
+          : updates.selectedAgent,
+      selectedSubAgent:
+        updates.selectedSubAgent === undefined
+          ? currentExecution.selectedSubAgent || null
+          : updates.selectedSubAgent,
+      selectedSkill:
+        updates.selectedSkill === undefined
+          ? currentExecution.selectedSkill || null
+          : updates.selectedSkill,
+      delegationSummary:
+        updates.delegationSummary === undefined
+          ? currentExecution.delegationSummary || null
+          : updates.delegationSummary,
     };
 
     state.executions[executionIndex] = updatedExecution;

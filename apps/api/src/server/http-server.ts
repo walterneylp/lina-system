@@ -1,6 +1,7 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { LinaEnv } from "../config/env";
 import { AgentLoader } from "../core/agents/agent-loader";
+import { DelegationArtifactFactory } from "../core/delegation/artifact-factory";
 import { MemoryManager } from "../core/memory/memory-manager";
 import { LinaOrchestrator } from "../core/orchestrator/orchestrator";
 import { ProviderFactory } from "../core/providers/provider-factory";
@@ -29,6 +30,12 @@ const readBody = async (request: IncomingMessage): Promise<string> => {
 };
 
 export const startHttpServer = (dependencies: HttpServerDependencies) => {
+  const artifactFactory = new DelegationArtifactFactory({
+    agentsDirectory: dependencies.env.agentsDirectory,
+    subAgentsDirectory: dependencies.env.subAgentsDirectory,
+    skillsDirectory: dependencies.env.skillsDirectory,
+    templatesDirectory: "./.agents/templates",
+  });
   const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
     try {
       const { method = "GET", url = "/" } = request;
@@ -110,9 +117,68 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
         return;
       }
 
+      if (method === "GET" && url === "/delegation/templates") {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(artifactFactory.getTemplateCatalog()));
+        return;
+      }
+
+      if (method === "POST" && url === "/delegation/factory") {
+        const rawBody = await readBody(request);
+        const payload = JSON.parse(rawBody || "{}") as {
+          kind?: "agent" | "sub-agent" | "skill";
+          name?: string;
+          description?: string;
+          version?: string;
+          role?: string;
+          delegationScope?: string;
+          allowedSkills?: string[];
+          capabilities?: string[];
+          objective?: string;
+          whenToUse?: string[];
+          rules?: string[];
+          overwrite?: boolean;
+        };
+
+        if (!payload.kind || !payload.name || !payload.description) {
+          response.writeHead(400, { "Content-Type": "application/json" });
+          response.end(
+            JSON.stringify({ error: "Missing `kind`, `name` or `description` in request body." })
+          );
+          return;
+        }
+
+        const artifact = artifactFactory.create({
+          kind: payload.kind,
+          name: payload.name,
+          description: payload.description,
+          version: payload.version,
+          role: payload.role,
+          delegationScope: payload.delegationScope,
+          allowedSkills: payload.allowedSkills,
+          capabilities: payload.capabilities,
+          objective: payload.objective,
+          whenToUse: payload.whenToUse,
+          rules: payload.rules,
+          overwrite: payload.overwrite,
+        });
+        await dependencies.memoryManager.log(
+          "info",
+          `Delegation artifact ${artifact.overwritten ? "updated" : "created"}: ${artifact.kind} ${artifact.name}`
+        );
+
+        response.writeHead(201, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(artifact));
+        return;
+      }
+
       if (method === "POST" && url === "/orchestrator/run") {
         const rawBody = await readBody(request);
-        const payload = JSON.parse(rawBody || "{}") as { text?: string; taskId?: string };
+        const payload = JSON.parse(rawBody || "{}") as {
+          text?: string;
+          taskId?: string;
+          delegatedBy?: string;
+        };
 
         if (!payload.text) {
           response.writeHead(400, { "Content-Type": "application/json" });
@@ -159,15 +225,42 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
             text: payload.text,
             runtimeContext,
           });
+          let taskId = payload.taskId || null;
+
+          if (!taskId && result.delegationMode && result.delegationMode !== "none") {
+            const delegatedTask = await dependencies.memoryManager.createTask({
+              title: payload.text,
+              status: "delegated",
+              assignedAgent: result.agentName || result.subAgentName || null,
+              targetAgent: result.agentName || null,
+              targetSubAgent: result.subAgentName || null,
+              targetSkill: result.skillName || null,
+              delegationMode: result.delegationMode,
+              delegatedBy: payload.delegatedBy || "orchestrator",
+            });
+            taskId = delegatedTask.id || null;
+          }
+
           await dependencies.memoryManager.append("assistant", result.answer);
           await dependencies.memoryManager.updateExecution(execution.id || "", {
+            taskId,
             provider: result.provider,
             status: "completed",
             resultSummary: result.answer.slice(0, 500),
+            selectedAgent: result.agentName || null,
+            selectedSubAgent: result.subAgentName || null,
+            selectedSkill: result.skillName || null,
+            delegationSummary: result.delegationSummary || null,
           });
 
           response.writeHead(200, { "Content-Type": "application/json" });
-          response.end(JSON.stringify({ ...result, executionId: execution.id || null }));
+          response.end(
+            JSON.stringify({
+              ...result,
+              executionId: execution.id || null,
+              taskId,
+            })
+          );
           return;
         } catch (error) {
           const message = error instanceof Error ? error.message : "Execution failed";
@@ -220,7 +313,12 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
         const payload = JSON.parse(rawBody || "{}") as {
           title?: string;
           status?: string;
-          assignedAgent?: string;
+          assignedAgent?: string | null;
+          targetAgent?: string | null;
+          targetSubAgent?: string | null;
+          targetSkill?: string | null;
+          delegationMode?: string | null;
+          delegatedBy?: string | null;
         };
 
         if (!payload.title) {
@@ -233,6 +331,11 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
           title: payload.title,
           status: payload.status || "pending",
           assignedAgent: payload.assignedAgent || null,
+          targetAgent: payload.targetAgent || null,
+          targetSubAgent: payload.targetSubAgent || null,
+          targetSkill: payload.targetSkill || null,
+          delegationMode: payload.delegationMode || null,
+          delegatedBy: payload.delegatedBy || null,
         });
         await dependencies.memoryManager.log("info", `Task created: ${task.title}`);
 
@@ -255,12 +358,22 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
           title?: string;
           status?: string;
           assignedAgent?: string | null;
+          targetAgent?: string | null;
+          targetSubAgent?: string | null;
+          targetSkill?: string | null;
+          delegationMode?: string | null;
+          delegatedBy?: string | null;
         };
 
         const task = await dependencies.memoryManager.updateTask(taskId, {
           title: payload.title,
           status: payload.status,
           assignedAgent: payload.assignedAgent,
+          targetAgent: payload.targetAgent,
+          targetSubAgent: payload.targetSubAgent,
+          targetSkill: payload.targetSkill,
+          delegationMode: payload.delegationMode,
+          delegatedBy: payload.delegatedBy,
         });
         await dependencies.memoryManager.log("info", `Task updated: ${task.title} (${task.status})`);
 

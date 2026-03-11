@@ -33,6 +33,11 @@ export type LinaTaskRecord = {
   title: string;
   status: string;
   assignedAgent?: string | null;
+  targetAgent?: string | null;
+  targetSubAgent?: string | null;
+  targetSkill?: string | null;
+  delegationMode?: string | null;
+  delegatedBy?: string | null;
   createdAt?: string;
 };
 
@@ -40,6 +45,11 @@ export type LinaTaskUpdate = {
   title?: string;
   status?: string;
   assignedAgent?: string | null;
+  targetAgent?: string | null;
+  targetSubAgent?: string | null;
+  targetSkill?: string | null;
+  delegationMode?: string | null;
+  delegatedBy?: string | null;
 };
 
 export type LinaSystemLogRecord = {
@@ -55,11 +65,20 @@ export type LinaExecutionRecord = {
   provider?: string | null;
   status: string;
   resultSummary?: string | null;
+  selectedAgent?: string | null;
+  selectedSubAgent?: string | null;
+  selectedSkill?: string | null;
+  delegationSummary?: string | null;
   createdAt?: string;
 };
 
 export type LinaExecutionUpdate = {
+  taskId?: string | null;
   provider?: string | null;
   status?: string;
   resultSummary?: string | null;
+  selectedAgent?: string | null;
+  selectedSubAgent?: string | null;
+  selectedSkill?: string | null;
+  delegationSummary?: string | null;
 };

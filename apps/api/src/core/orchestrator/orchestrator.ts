@@ -1,9 +1,8 @@
 import { AgentLoader } from "../agents/agent-loader";
-import { AgentRouter } from "../agents/agent-router";
 import { AgentMetadata } from "../agents/agent.types";
 import { AgentLoop } from "../agent-loop/agent-loop";
+import { DelegationEngine } from "../delegation/delegation-engine";
 import { SkillLoader } from "../skills/skill-loader";
-import { SkillRouter } from "../skills/skill-router";
 import { LlmMessage } from "../providers/provider.types";
 import { SkillMetadata } from "../skills/skill.types";
 import { OrchestratorResponse } from "./orchestrator.types";
@@ -15,8 +14,7 @@ type OrchestratorInput = {
 };
 
 export class LinaOrchestrator {
-  private readonly skillRouter = new SkillRouter();
-  private readonly agentRouter = new AgentRouter();
+  private readonly delegationEngine = new DelegationEngine();
 
   constructor(
     private readonly agentLoop: AgentLoop,
@@ -31,9 +29,16 @@ export class LinaOrchestrator {
     const skills = this.skillLoader.load();
     const agents = this.agentLoader.load();
     const subAgents = this.subAgentLoader.load();
-    const selectedSkill = this.skillRouter.route(input.text, skills);
-    const selectedAgent = this.agentRouter.route(input.text, agents);
-    const selectedSubAgent = this.agentRouter.route(input.text, subAgents);
+    const delegation = this.delegationEngine.decide({
+      text: input.text,
+      agents,
+      subAgents,
+      skills,
+    });
+    const selectedSkill = skills.find((skill) => skill.name === delegation.selectedSkill) || null;
+    const selectedAgent = agents.find((agent) => agent.name === delegation.selectedAgent) || null;
+    const selectedSubAgent =
+      subAgents.find((agent) => agent.name === delegation.selectedSubAgent) || null;
     const delegationContext = JSON.stringify(
       {
         agents: agents.map((agent) => ({
@@ -78,6 +83,8 @@ export class LinaOrchestrator {
       skillName: selectedSkill?.name || null,
       agentName: selectedAgent?.name || null,
       subAgentName: selectedSubAgent?.name || null,
+      delegationMode: delegation.delegationMode,
+      delegationSummary: delegation.summary,
       availableSkills: skills.map((skill: SkillMetadata) => ({
         name: skill.name,
         description: skill.description,
