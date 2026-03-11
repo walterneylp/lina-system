@@ -5,6 +5,7 @@ import { createMemoryStoreWithFallback } from "./core/memory/memory-store.factor
 import { LinaOrchestrator } from "./core/orchestrator/orchestrator";
 import { ProviderFactory } from "./core/providers/provider-factory";
 import { SkillLoader } from "./core/skills/skill-loader";
+import { RuntimeLock } from "./runtime/runtime-lock";
 import { startHttpServer } from "./server/http-server";
 import { AudioPreprocessor } from "./telegram/audio-preprocessor";
 import { TelegramClient } from "./telegram/telegram-client";
@@ -24,6 +25,11 @@ const agentLoop = new AgentLoop({
 });
 
 export const bootstrapLiNa = async () => {
+  const runtimeLock = new RuntimeLock({
+    lockFilePath: `${env.tempDirectory.replace(/\/$/, "")}/lina-api.lock`,
+  });
+  await runtimeLock.acquire();
+
   const memoryStore = await createMemoryStoreWithFallback(env);
   const memoryManager = new MemoryManager(memoryStore);
   const orchestrator = new LinaOrchestrator(
@@ -102,9 +108,30 @@ export const bootstrapLiNa = async () => {
     });
   }
 
+  const shutdown = async () => {
+    telegramRunner?.stop();
+    httpServer.close();
+    await runtimeLock.release();
+  };
+
+  const handleSignal = (signal: NodeJS.Signals) => {
+    console.log(`[LiNa] shutting down on ${signal}`);
+    void shutdown().finally(() => process.exit(0));
+  };
+
+  process.once("SIGINT", handleSignal);
+  process.once("SIGTERM", handleSignal);
+  process.once("exit", () => {
+    void runtimeLock.release();
+  });
+
   return { env, memoryManager, orchestrator, httpServer, telegramRunner, telegramRuntime };
 };
 
 if (process.argv[1]?.endsWith("/apps/api/src/index.ts")) {
-  void bootstrapLiNa();
+  void bootstrapLiNa().catch((error) => {
+    const message = error instanceof Error ? error.message : "Unknown bootstrap error";
+    console.error("[LiNa] bootstrap failed", message);
+    process.exit(1);
+  });
 }

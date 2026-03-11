@@ -23,6 +23,10 @@ export class TelegramPollingRunner {
     void this.initializeAndLoop();
   }
 
+  public stop(): void {
+    this.active = false;
+  }
+
   private async initializeAndLoop(): Promise<void> {
     if (this.options.discardPendingUpdatesOnStart !== false) {
       await this.discardPendingUpdates();
