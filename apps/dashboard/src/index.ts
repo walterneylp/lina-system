@@ -1346,6 +1346,21 @@ const html = `<!DOCTYPE html>
             <h2>Telegram</h2>
             <p>Resumo por origem quando os metadados de mensagem estiverem disponíveis.</p>
           </div>
+          <div class="section-tools">
+            <label>
+              Busca
+              <input id="telegram-filter-query" class="control" type="text" placeholder="chat, usuário, conteúdo..." />
+            </label>
+            <label>
+              Tipo
+              <select id="telegram-filter-type" class="control">
+                <option value="">Todos</option>
+                <option value="text">text</option>
+                <option value="voice">voice</option>
+                <option value="audio">audio</option>
+              </select>
+            </label>
+          </div>
           <div class="feed" id="telegram-feed"></div>
         </article>
 
@@ -1365,6 +1380,18 @@ const html = `<!DOCTYPE html>
                 <option value="">Todos</option>
                 <option value="info">info</option>
                 <option value="error">error</option>
+                <option value="warn">warn</option>
+              </select>
+            </label>
+            <label>
+              Categoria
+              <select id="log-filter-category" class="control">
+                <option value="">Todas</option>
+                <option value="dashboard-audit">dashboard-audit</option>
+                <option value="telegram-admin">telegram-admin</option>
+                <option value="telegram-command">telegram-command</option>
+                <option value="bootstrap">bootstrap</option>
+                <option value="runtime">runtime</option>
               </select>
             </label>
           </div>
@@ -1555,6 +1582,38 @@ const html = `<!DOCTYPE html>
           .map((item) => item.trim())
           .filter(Boolean);
 
+      const listEnabledPermissions = (permissions) =>
+        Object.entries(permissions || {})
+          .filter(([, enabled]) => Boolean(enabled))
+          .map(([name]) => name);
+
+      const humanizePermission = (permission) =>
+        ({
+          manageUsers: "Gerenciar usuários",
+          manageBootstrap: "Controlar bootstrap",
+          resetPasswords: "Resetar senhas",
+          runComposer: "Executar composer",
+          manageTasks: "Gerenciar tarefas",
+          viewLogs: "Ver logs",
+          viewSettings: "Ver configurações",
+          useTelegramRun: "Usar /run no Telegram",
+          useTelegramAdmin: "Usar comandos admin no Telegram",
+        }[permission] || permission);
+
+      const classifyLogCategory = (message) => {
+        const normalized = safeText(message).toLowerCase();
+        if (normalized.includes("[dashboard-audit]")) return "dashboard-audit";
+        if (normalized.includes("[telegram-admin]")) return "telegram-admin";
+        if (normalized.includes("[telegram-command]")) return "telegram-command";
+        if (normalized.includes("bootstrap")) return "bootstrap";
+        return "runtime";
+      };
+
+      const getTelegramFilters = () => ({
+        query: document.getElementById("telegram-filter-query").value.trim().toLowerCase(),
+        type: document.getElementById("telegram-filter-type").value.trim(),
+      });
+
       const hasUiPermission = (permission) =>
         Boolean(dashboardState.auth?.currentUser?.permissions?.[permission]);
 
@@ -1703,6 +1762,7 @@ const html = `<!DOCTYPE html>
       const getLogFilters = () => ({
         query: document.getElementById("log-filter").value.trim().toLowerCase(),
         level: document.getElementById("log-filter-level").value.trim(),
+        category: document.getElementById("log-filter-category").value.trim(),
       });
 
       const getExecutionFilters = () => ({
@@ -1835,6 +1895,7 @@ const html = `<!DOCTYPE html>
 
       const renderTelegramView = (messages) => {
         const feed = document.getElementById("telegram-feed");
+        const filters = getTelegramFilters();
         const telegramMessages = (messages || []).filter((message) => message.metadata?.source === "telegram");
 
         if (!telegramMessages.length) {
@@ -1854,19 +1915,39 @@ const html = `<!DOCTYPE html>
             firstName: metadata.firstName,
             userId: metadata.userId,
             count: 0,
+            messageTypes: new Set(),
             lastMessageAt: message.createdAt,
             lastPreview: message.content,
           };
 
           current.count += 1;
+          if (metadata.messageType) {
+            current.messageTypes.add(metadata.messageType);
+          }
           current.lastMessageAt = message.createdAt;
           current.lastPreview = message.content;
           grouped.set(key, current);
         }
 
         const cards = Array.from(grouped.values())
+          .filter((item) => {
+            const typeMatch = !filters.type || item.messageTypes.has(filters.type);
+            const queryMatch =
+              !filters.query ||
+              safeText(item.chatId).toLowerCase().includes(filters.query) ||
+              safeText(item.userId).toLowerCase().includes(filters.query) ||
+              safeText(item.username).toLowerCase().includes(filters.query) ||
+              safeText(item.firstName).toLowerCase().includes(filters.query) ||
+              safeText(item.lastPreview).toLowerCase().includes(filters.query);
+            return typeMatch && queryMatch;
+          })
           .sort((left, right) => String(right.lastMessageAt).localeCompare(String(left.lastMessageAt)))
           .slice(0, 12);
+
+        if (!cards.length) {
+          renderEmpty(feed, "Nenhum chat do Telegram corresponde aos filtros atuais.");
+          return;
+        }
 
         feed.innerHTML = cards.map((item) => \`
           <article class="feed-item">
@@ -1876,6 +1957,7 @@ const html = `<!DOCTYPE html>
             </div>
             <div class="feed-title">\${escapeHtml(item.firstName || item.username || item.chatId || "origem desconhecida")}</div>
             <div class="feed-body">chatId: \${escapeHtml(item.chatId)} | userId: \${escapeHtml(item.userId)} | mensagens: \${escapeHtml(item.count)}</div>
+            <div class="feed-submeta">tipos: \${escapeHtml(Array.from(item.messageTypes).join(", ") || "n/a")}</div>
             <div class="feed-body">\${escapeHtml(item.lastPreview)}</div>
           </article>
         \`).join("");
@@ -1886,11 +1968,13 @@ const html = `<!DOCTYPE html>
         const filters = getLogFilters();
         const filteredLogs = (logs || []).filter((log) => {
           const levelMatch = !filters.level || log.level === filters.level;
+          const category = classifyLogCategory(log.message);
+          const categoryMatch = !filters.category || category === filters.category;
           const queryMatch =
             !filters.query ||
             safeText(log.message).toLowerCase().includes(filters.query) ||
             safeText(log.level).toLowerCase().includes(filters.query);
-          return levelMatch && queryMatch;
+          return levelMatch && categoryMatch && queryMatch;
         });
 
         if (!filteredLogs.length) {
@@ -1902,6 +1986,7 @@ const html = `<!DOCTYPE html>
           <article class="feed-item">
             <div class="feed-meta">
               <span class="badge \${badgeClass(log.level === "error" ? "degraded" : log.level === "info" ? "ok" : "configured")}">\${escapeHtml(log.level)}</span>
+              <span class="badge neutral">\${escapeHtml(classifyLogCategory(log.message))}</span>
               <span>\${formatTime(log.createdAt)}</span>
             </div>
             <div class="feed-body">\${escapeHtml(log.message)}</div>
@@ -1957,6 +2042,7 @@ const html = `<!DOCTYPE html>
         const users = authPayload.users || [];
         const canManageUsers = Boolean(currentUser?.permissions?.manageUsers);
         const canManageBootstrap = Boolean(currentUser?.permissions?.manageBootstrap);
+        const currentPermissionList = listEnabledPermissions(currentUser?.permissions || {});
 
         pill.textContent = currentUser
           ? safeText(currentUser.username) + " · " + safeText(currentUser.role)
@@ -2017,11 +2103,13 @@ const html = `<!DOCTYPE html>
               <article class="feed-item">
                 <div class="feed-meta">
                   <span class="badge \${user.isActive ? "ok" : "bad"}">\${user.isActive ? "ativo" : "inativo"}</span>
+                  <span class="badge neutral">\${escapeHtml(user.role)}</span>
                   <span>\${formatTime(user.createdAt)}</span>
                 </div>
                 <div class="feed-title">\${escapeHtml(user.username)}</div>
                 <div class="feed-body">role: \${escapeHtml(user.role)} | último login: \${escapeHtml(user.lastLoginAt ? formatTime(user.lastLoginAt) : "nunca")}</div>
                 <div class="feed-submeta">telegram ids: \${escapeHtml((user.telegramUserIds || []).join(", ") || "nenhum")}</div>
+                <div class="feed-submeta">permissões: \${escapeHtml(listEnabledPermissions(user.permissions).map(humanizePermission).join(" · ") || "nenhuma")}</div>
               </article>
             \`).join("")
           : '<div class="empty">Nenhum usuário cadastrado ainda.</div>';
@@ -2032,8 +2120,9 @@ const html = `<!DOCTYPE html>
               <span class="badge \${authState?.allowAdminBootstrap ? "warn" : "neutral"}">\${authState?.allowAdminBootstrap ? "bootstrap on" : "bootstrap off"}</span>
               <span>Usuários: \${escapeHtml(authState?.usersCount || 0)}</span>
             </div>
-            <div class="feed-body">Se o bootstrap estiver habilitado, a tela de login mostrará o formulário para cadastrar um administrador inicial.</div>
-            <div class="feed-submeta">Permissões atuais: \${canManageUsers ? "gestão de usuários ativa" : "somente troca da própria senha"}</div>
+            <div class="feed-title">Sessão atual: \${escapeHtml(currentUser?.username || "n/a")}</div>
+            <div class="feed-body">Papel: \${escapeHtml(currentUser?.role || "n/a")} | bootstrap: \${authState?.allowAdminBootstrap ? "habilitado" : "desabilitado"}</div>
+            <div class="feed-submeta">Permissões atuais: \${escapeHtml(currentPermissionList.map(humanizePermission).join(" · ") || "nenhuma")}</div>
           </article>\`,
           userCards,
         ].join("");
@@ -2353,8 +2442,11 @@ const html = `<!DOCTYPE html>
         "task-filter-query",
         "message-filter",
         "message-filter-role",
+        "telegram-filter-query",
+        "telegram-filter-type",
         "log-filter",
         "log-filter-level",
+        "log-filter-category",
         "execution-filter-status",
         "execution-filter-provider",
       ].forEach((id) => {
