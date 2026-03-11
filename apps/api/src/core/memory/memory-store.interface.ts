@@ -1,4 +1,10 @@
-import { ConversationMessage, LinaTaskRecord, MemoryRole, PersistenceHealth } from "./memory.types";
+import {
+  ConversationMessage,
+  LinaSystemLogRecord,
+  LinaTaskRecord,
+  MemoryRole,
+  PersistenceHealth,
+} from "./memory.types";
 
 export interface MemoryStore {
   getHealth(): Promise<PersistenceHealth>;
@@ -11,5 +17,6 @@ export interface MemoryStore {
   listMessages(): Promise<ConversationMessage[]>;
   createTask(task: LinaTaskRecord): Promise<LinaTaskRecord>;
   listTasks(): Promise<LinaTaskRecord[]>;
+  listLogs(limit?: number): Promise<LinaSystemLogRecord[]>;
   log(level: string, message: string): Promise<void>;
 }

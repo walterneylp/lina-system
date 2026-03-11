@@ -1,5 +1,11 @@
 import { MemoryStore } from "./memory-store.interface";
-import { ConversationMessage, LinaTaskRecord, MemoryRole, PersistenceHealth } from "./memory.types";
+import {
+  ConversationMessage,
+  LinaSystemLogRecord,
+  LinaTaskRecord,
+  MemoryRole,
+  PersistenceHealth,
+} from "./memory.types";
 
 export class MemoryManager {
   private activeConversationId?: string;
@@ -35,6 +41,10 @@ export class MemoryManager {
 
   public async listTasks(): Promise<LinaTaskRecord[]> {
     return this.store.listTasks();
+  }
+
+  public async listLogs(limit?: number): Promise<LinaSystemLogRecord[]> {
+    return this.store.listLogs(limit);
   }
 
   public async log(level: string, message: string): Promise<void> {

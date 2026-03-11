@@ -1,6 +1,12 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { MemoryStore } from "./memory-store.interface";
-import { ConversationMessage, LinaTaskRecord, MemoryRole, PersistenceHealth } from "./memory.types";
+import {
+  ConversationMessage,
+  LinaSystemLogRecord,
+  LinaTaskRecord,
+  MemoryRole,
+  PersistenceHealth,
+} from "./memory.types";
 
 type SupabaseMemoryStoreOptions = {
   url: string;
@@ -144,6 +150,25 @@ export class SupabaseMemoryStore implements MemoryStore {
       title: item.title,
       status: item.status,
       assignedAgent: item.assigned_agent,
+      createdAt: item.created_at,
+    }));
+  }
+
+  public async listLogs(limit = 50): Promise<LinaSystemLogRecord[]> {
+    const { data, error } = await this.client
+      .from("system_logs")
+      .select("id, level, message, created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to list logs: ${error.message}`);
+    }
+
+    return ((data || []) as Array<Record<string, string>>).map((item: Record<string, string>) => ({
+      id: item.id,
+      level: item.level,
+      message: item.message,
       createdAt: item.created_at,
     }));
   }

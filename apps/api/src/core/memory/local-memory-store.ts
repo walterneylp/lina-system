@@ -2,7 +2,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { MemoryStore } from "./memory-store.interface";
-import { ConversationMessage, LinaTaskRecord, MemoryRole, PersistenceHealth } from "./memory.types";
+import {
+  ConversationMessage,
+  LinaSystemLogRecord,
+  LinaTaskRecord,
+  MemoryRole,
+  PersistenceHealth,
+} from "./memory.types";
 
 type LocalMemoryState = {
   messages: ConversationMessage[];
@@ -72,6 +78,19 @@ export class LocalMemoryStore implements MemoryStore {
 
   public async listTasks(): Promise<LinaTaskRecord[]> {
     return this.load().tasks;
+  }
+
+  public async listLogs(limit = 50): Promise<LinaSystemLogRecord[]> {
+    return this.load()
+      .systemLogs
+      .slice(-limit)
+      .reverse()
+      .map((item) => ({
+        id: item.id,
+        level: item.level,
+        message: item.message,
+        createdAt: item.createdAt,
+      }));
   }
 
   public async log(level: string, message: string): Promise<void> {

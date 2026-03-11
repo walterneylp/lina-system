@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev:api": "tsx apps/api/src/index.ts",
+    "dev:dashboard": "tsx apps/dashboard/src/index.ts",
     "check:structure": "node scripts/ops/check-structure.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },

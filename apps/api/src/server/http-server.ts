@@ -131,6 +131,17 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
         return;
       }
 
+      if (method === "GET" && url.startsWith("/logs")) {
+        const parsedUrl = new URL(url, `http://localhost:${dependencies.env.appPort}`);
+        const limit = Number.parseInt(parsedUrl.searchParams.get("limit") || "50", 10);
+        const logs = await dependencies.memoryManager.listLogs(
+          Number.isFinite(limit) ? limit : 50
+        );
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(logs));
+        return;
+      }
+
       if (method === "POST" && url === "/tasks") {
         const rawBody = await readBody(request);
         const payload = JSON.parse(rawBody || "{}") as {
