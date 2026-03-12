@@ -1939,15 +1939,15 @@ const html = `<!DOCTYPE html>
           .replaceAll('"', "&quot;")
           .replaceAll("'", "&#39;");
 
-      const normalizeNewlines = (value) => String(value || "").replace(/\r\n/g, "\n");
+      const normalizeNewlines = (value) => String(value || "").replace(/\\r\\n/g, "\\n");
 
       const splitArtifactFrontmatter = (content) => {
         const normalized = normalizeNewlines(content);
-        if (!normalized.startsWith("---\n")) {
+        if (!normalized.startsWith("---\\n")) {
           return { hasFrontmatter: false, frontmatter: "", body: normalized };
         }
 
-        const closingIndex = normalized.indexOf("\n---\n", 4);
+        const closingIndex = normalized.indexOf("\\n---\\n", 4);
         if (closingIndex === -1) {
           return { hasFrontmatter: false, frontmatter: "", body: normalized };
         }
@@ -1972,15 +1972,15 @@ const html = `<!DOCTYPE html>
         }
 
         let activeListKey = null;
-        frontmatter.split("\n").forEach((line) => {
-          const listMatch = line.match(/^\s*-\s*(.+?)\s*$/);
+        frontmatter.split("\\n").forEach((line) => {
+          const listMatch = line.match(/^\\s*-\\s*(.+?)\\s*$/);
           if (listMatch && activeListKey) {
             metadata[activeListKey].push(listMatch[1].trim());
             return;
           }
 
           activeListKey = null;
-          const fieldMatch = line.match(/^([a-zA-Z0-9_]+):\s*(.*)$/);
+          const fieldMatch = line.match(/^([a-zA-Z0-9_]+):\\s*(.*)$/);
           if (!fieldMatch) {
             return;
           }
@@ -2024,32 +2024,32 @@ const html = `<!DOCTYPE html>
 
       const normalizeStructuredList = (value, fallback) => {
         const normalized = String(value || "")
-          .split(/[\n,]/)
+          .split(/[\\n,]/)
           .map((item) => item.trim())
           .filter(Boolean);
         return normalized.length ? normalized : fallback;
       };
 
       const formatArtifactListField = (key, values) =>
-        [key + ":", ...values.map((value) => "  - " + value)].join("\n");
+        [key + ":", ...values.map((value) => "  - " + value)].join("\\n");
 
       const upsertArtifactListField = (frontmatter, key, values) => {
-        const lines = normalizeNewlines(frontmatter).split("\n");
+        const lines = normalizeNewlines(frontmatter).split("\\n");
         const nextLines = [];
         let replaced = false;
 
         for (let index = 0; index < lines.length; index += 1) {
           const line = lines[index];
-          const fieldMatch = line.match(/^([a-zA-Z0-9_]+):\s*(.*)$/);
+          const fieldMatch = line.match(/^([a-zA-Z0-9_]+):\\s*(.*)$/);
           if (!fieldMatch || fieldMatch[1] !== key) {
             nextLines.push(line);
             continue;
           }
 
           replaced = true;
-          nextLines.push(...formatArtifactListField(key, values).split("\n"));
+          nextLines.push(...formatArtifactListField(key, values).split("\\n"));
           index += 1;
-          while (index < lines.length && /^\s*-\s+/.test(lines[index])) {
+          while (index < lines.length && /^\\s*-\\s+/.test(lines[index])) {
             index += 1;
           }
           index -= 1;
@@ -2059,10 +2059,10 @@ const html = `<!DOCTYPE html>
           if (nextLines.length && nextLines[nextLines.length - 1] !== "") {
             nextLines.push("");
           }
-          nextLines.push(...formatArtifactListField(key, values).split("\n"));
+          nextLines.push(...formatArtifactListField(key, values).split("\\n"));
         }
 
-        return nextLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+        return nextLines.join("\\n").replace(/\\n{3,}/g, "\\n\\n").trim();
       };
 
       const applyArtifactStructuredFieldsToContent = (content, options) => {
@@ -2074,12 +2074,12 @@ const html = `<!DOCTYPE html>
         const withAccess = upsertArtifactListField(baseFrontmatter, "accessible_by", accessibleBy);
         const finalFrontmatter = upsertArtifactListField(withAccess, "editable_by", editableBy);
         const normalizedBody = hasFrontmatter ? body : source;
-        return ["---", finalFrontmatter, "---", normalizedBody.replace(/^\n*/, "")].join("\n");
+        return ["---", finalFrontmatter, "---", normalizedBody.replace(/^\\n*/, "")].join("\\n");
       };
 
       const computeLineDiff = (beforeValue, afterValue) => {
-        const before = normalizeNewlines(beforeValue).split("\n");
-        const after = normalizeNewlines(afterValue).split("\n");
+        const before = normalizeNewlines(beforeValue).split("\\n");
+        const after = normalizeNewlines(afterValue).split("\\n");
         const rows = Array.from({ length: before.length + 1 }, () => Array(after.length + 1).fill(0));
 
         for (let i = before.length - 1; i >= 0; i -= 1) {
