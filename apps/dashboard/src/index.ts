@@ -1192,7 +1192,37 @@ const html = `<!DOCTYPE html>
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
+        align-items: end;
         margin-bottom: 14px;
+      }
+
+      .artifact-toolbar > label {
+        min-width: 170px;
+      }
+
+      .artifact-toolbar-form {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: end;
+        flex: 1 1 560px;
+      }
+
+      .artifact-toolbar-form label {
+        min-width: 150px;
+        flex: 1 1 150px;
+      }
+
+      .artifact-toolbar-form .artifact-description-field {
+        flex: 1.8 1 260px;
+      }
+
+      .artifact-toolbar-form .artifact-overwrite-toggle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 44px;
+        flex: 0 0 auto;
       }
 
       .provider-grid {
@@ -1276,6 +1306,17 @@ const html = `<!DOCTYPE html>
 
         .artifact-layout {
           grid-template-columns: 1fr;
+        }
+
+        .artifact-toolbar {
+          align-items: stretch;
+        }
+
+        .artifact-toolbar > label,
+        .artifact-toolbar-form,
+        .artifact-toolbar-form label {
+          min-width: 100%;
+          flex-basis: 100%;
         }
       }
 
@@ -1657,36 +1698,33 @@ const html = `<!DOCTYPE html>
               Busca
               <input id="artifact-filter-query" class="control" type="text" placeholder="nome, descrição, acesso..." />
             </label>
+            <form class="artifact-toolbar-form" id="artifact-factory-form">
+              <label>
+                Criar tipo
+                <select id="artifact-kind" class="control">
+                  <option value="agent">agent</option>
+                  <option value="sub-agent">sub-agent</option>
+                  <option value="skill">skill</option>
+                </select>
+              </label>
+              <label>
+                Nome
+                <input id="artifact-name" class="control" type="text" placeholder="ex: document-analyzer-specialist" required />
+              </label>
+              <label class="artifact-description-field">
+                Descrição
+                <input id="artifact-description" class="control" type="text" placeholder="Descrição objetiva do artifact" required />
+              </label>
+              <label class="artifact-overwrite-toggle">
+                <input id="artifact-overwrite" type="checkbox" />
+                sobrescrever
+              </label>
+              <button class="task-action" type="submit">Criar artifact</button>
+            </form>
           </div>
+          <div class="composer-result" id="artifact-factory-result">Nenhum artifact criado nesta sessão.</div>
           <div class="artifact-layout">
             <div class="artifact-stack">
-              <section class="settings-card">
-                <h3>Factory de Artifacts</h3>
-                <form class="settings-form" id="artifact-factory-form">
-                  <label>
-                    Tipo
-                    <select id="artifact-kind" class="control">
-                      <option value="agent">agent</option>
-                      <option value="sub-agent">sub-agent</option>
-                      <option value="skill">skill</option>
-                    </select>
-                  </label>
-                  <label>
-                    Nome
-                    <input id="artifact-name" class="control" type="text" placeholder="ex: document-analyzer-specialist" required />
-                  </label>
-                  <label>
-                    Descrição
-                    <input id="artifact-description" class="control" type="text" placeholder="Descrição objetiva do artifact" required />
-                  </label>
-                  <label style="display:flex;align-items:center;gap:10px;">
-                    <input id="artifact-overwrite" type="checkbox" />
-                    sobrescrever se já existir
-                  </label>
-                  <button class="task-action" type="submit">Criar artifact</button>
-                </form>
-                <div class="composer-result" id="artifact-factory-result">Nenhum artifact criado nesta sessão.</div>
-              </section>
               <section class="settings-card">
                 <h3>Catálogo Atual</h3>
                 <div class="artifact-list" id="artifacts-feed"></div>
