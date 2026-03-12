@@ -1077,13 +1077,17 @@ const html = `<!DOCTYPE html>
 
       .artifact-layout {
         display: grid;
-        grid-template-columns: minmax(320px, 0.7fr) minmax(0, 1.3fr);
+        grid-template-columns: minmax(260px, 0.48fr) minmax(0, 1.52fr);
         gap: 18px;
       }
 
       .artifact-stack {
         display: grid;
         gap: 18px;
+      }
+
+      .artifact-editor {
+        min-width: 0;
       }
 
       .artifact-list {
@@ -1124,7 +1128,8 @@ const html = `<!DOCTYPE html>
       }
 
       .artifact-editor textarea {
-        min-height: 420px;
+        min-height: 520px;
+        width: 100%;
         resize: vertical;
         font-family: "IBM Plex Mono", monospace;
         font-size: 0.84rem;
