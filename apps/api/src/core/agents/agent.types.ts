@@ -1,4 +1,14 @@
+import { ArtifactDocumentRole } from "../catalog/artifact-package";
+
 export type AgentKind = "agent" | "sub-agent";
+
+export type AgentDocument = {
+  role: ArtifactDocumentRole;
+  fileName: string;
+  path: string;
+  title: string;
+  content: string;
+};
 
 export type AgentMetadata = {
   name: string;
@@ -9,7 +19,10 @@ export type AgentMetadata = {
   allowedSkills: string[];
   accessibleBy: string[];
   editableBy: string[];
+  format: "legacy" | "package";
+  directoryPath: string;
   path: string;
   version?: string;
   content?: string;
+  documents: AgentDocument[];
 };

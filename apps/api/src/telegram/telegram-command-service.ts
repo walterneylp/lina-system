@@ -293,7 +293,12 @@ export class TelegramCommandService {
       const templates = this.artifactFactory.getTemplateCatalog();
       return [
         "Templates oficiais da LiNa",
-        ...templates.map((item) => `- ${item.kind}: ${item.path}`),
+        ...templates.map(
+          (item) =>
+            `- ${item.kind}: ${item.documents
+              .map((document) => `${document.title}=${document.path}`)
+              .join(" | ")}`
+        ),
       ].join("\n");
     }
 

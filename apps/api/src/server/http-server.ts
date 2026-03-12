@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { LinaEnv } from "../config/env";
 import { AgentLoader } from "../core/agents/agent-loader";
+import { inferArtifactKindFromDocumentPath } from "../core/catalog/artifact-package";
 import { DelegationArtifactFactory } from "../core/delegation/artifact-factory";
 import { DelegationArtifactValidator } from "../core/delegation/artifact-validator";
 import { MemoryManager } from "../core/memory/memory-manager";
@@ -48,18 +49,24 @@ const inferArtifactKindFromPath = (
 ): "agent" | "sub-agent" | "skill" | null => {
   const resolvedPath = normalizePath(path);
 
-  if (resolvedPath.startsWith(`${normalizePath(env.agentsDirectory)}/`) && resolvedPath.endsWith("/AGENT.md")) {
+  if (
+    resolvedPath.startsWith(`${normalizePath(env.agentsDirectory)}/`) &&
+    inferArtifactKindFromDocumentPath("agent", resolvedPath)
+  ) {
     return "agent";
   }
 
   if (
     resolvedPath.startsWith(`${normalizePath(env.subAgentsDirectory)}/`) &&
-    resolvedPath.endsWith("/SUB_AGENT.md")
+    inferArtifactKindFromDocumentPath("sub-agent", resolvedPath)
   ) {
     return "sub-agent";
   }
 
-  if (resolvedPath.startsWith(`${normalizePath(env.skillsDirectory)}/`) && resolvedPath.endsWith("/SKILL.md")) {
+  if (
+    resolvedPath.startsWith(`${normalizePath(env.skillsDirectory)}/`) &&
+    inferArtifactKindFromDocumentPath("skill", resolvedPath)
+  ) {
     return "skill";
   }
 
@@ -74,7 +81,13 @@ const getArtifactByPath = (dependencies: HttpServerDependencies, manifestPath: s
     ...dependencies.skillLoader.load(),
   ];
 
-  return catalogs.find((item) => normalizePath(item.path) === path) || null;
+  return (
+    catalogs.find(
+      (item) =>
+        normalizePath(item.path) === path ||
+        item.documents?.some((document) => normalizePath(document.path) === path)
+    ) || null
+  );
 };
 
 export const startHttpServer = (dependencies: HttpServerDependencies) => {
@@ -222,6 +235,46 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
         );
 
         response.writeHead(201, { "Content-Type": "application/json" });
+        response.end(JSON.stringify({ artifact, validation }));
+        return;
+      }
+
+      if (method === "POST" && url === "/delegation/migrate-legacy") {
+        const rawBody = await readBody(request);
+        const payload = JSON.parse(rawBody || "{}") as {
+          kind?: "agent" | "sub-agent" | "skill";
+          directoryPath?: string;
+        };
+
+        if (!payload.kind || !payload.directoryPath) {
+          response.writeHead(400, { "Content-Type": "application/json" });
+          response.end(
+            JSON.stringify({ error: "Missing `kind` or `directoryPath` in request body." })
+          );
+          return;
+        }
+
+        const allowedRoots = [
+          dependencies.env.agentsDirectory,
+          dependencies.env.subAgentsDirectory,
+          dependencies.env.skillsDirectory,
+        ];
+        const directoryPath = normalizePath(payload.directoryPath);
+
+        if (!isWithinAllowedRoots(directoryPath, allowedRoots)) {
+          response.writeHead(403, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ error: "Artifact directory outside allowed roots." }));
+          return;
+        }
+
+        const artifact = artifactFactory.migrateLegacyArtifact(payload.kind, directoryPath);
+        const validation = artifactValidator.validate(payload.kind, artifact.manifestPath);
+        await dependencies.memoryManager.log(
+          "info",
+          `[delegation-migrate] legacy ${artifact.kind} ${artifact.name} -> package`
+        );
+
+        response.writeHead(200, { "Content-Type": "application/json" });
         response.end(JSON.stringify({ artifact, validation }));
         return;
       }

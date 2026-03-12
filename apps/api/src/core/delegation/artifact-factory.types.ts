@@ -20,5 +20,11 @@ export type CreatedDelegationArtifact = {
   name: string;
   directoryPath: string;
   manifestPath: string;
+  documents: Array<{
+    role: string;
+    fileName: string;
+    title: string;
+    path: string;
+  }>;
   overwritten: boolean;
 };

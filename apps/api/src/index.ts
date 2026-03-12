@@ -24,8 +24,8 @@ import { TelegramRuntime } from "./telegram/telegram-runtime";
 const env = loadEnv();
 const providerFactory = new ProviderFactory();
 const skillLoader = new SkillLoader(env.skillsDirectory);
-const agentLoader = new AgentLoader(env.agentsDirectory, "AGENT.md", "agent");
-const subAgentLoader = new AgentLoader(env.subAgentsDirectory, "SUB_AGENT.md", "sub-agent");
+const agentLoader = new AgentLoader(env.agentsDirectory, "agent");
+const subAgentLoader = new AgentLoader(env.subAgentsDirectory, "sub-agent");
 const telegramRuntime = new TelegramRuntime();
 const agentLoop = new AgentLoop({
   providerFactory,

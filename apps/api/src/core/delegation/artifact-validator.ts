@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
+import { getArtifactPackageDefinition, listArtifactPackageDocuments } from "../catalog/artifact-package";
 import { asString, asStringArray, parseFrontmatter } from "../catalog/manifest-parser";
 import { DelegationArtifactKind } from "./artifact-factory.types";
 
@@ -27,6 +28,9 @@ export class DelegationArtifactValidator {
   public validate(kind: DelegationArtifactKind, manifestPath: string): DelegationArtifactValidationResult {
     const checks: DelegationArtifactValidationCheck[] = [];
     const resolvedPath = resolve(manifestPath);
+    const directoryPath = dirname(resolvedPath);
+    const artifactPackage = listArtifactPackageDocuments(kind, directoryPath);
+    const definition = getArtifactPackageDefinition(kind);
 
     checks.push({
       label: "manifest-exists",
@@ -42,18 +46,38 @@ export class DelegationArtifactValidator {
       };
     }
 
-    const content = readFileSync(resolvedPath, "utf8");
+    if (!artifactPackage) {
+      return {
+        valid: false,
+        manifestPath: resolvedPath,
+        checks: checks.concat({
+          label: "artifact-package-detected",
+          ok: false,
+          details: "Não foi possível detectar o pacote do artifact.",
+        }),
+      };
+    }
+
+    const manifestDocument =
+      artifactPackage.documents.find((document) => document.role === "manifest") ||
+      artifactPackage.documents[0];
+    const content = manifestDocument?.content || "";
     const metadata = parseFrontmatter(content);
-    const folderName = basename(dirname(resolvedPath));
+    const folderName = basename(directoryPath);
     const expectedRoot =
       kind === "agent"
         ? resolve(this.options.agentsDirectory)
         : kind === "sub-agent"
           ? resolve(this.options.subAgentsDirectory)
           : resolve(this.options.skillsDirectory);
-    const normalizedRoot = dirname(dirname(resolvedPath));
-    const expectedManifestName =
-      kind === "agent" ? "AGENT.md" : kind === "sub-agent" ? "SUB_AGENT.md" : "SKILL.md";
+    const normalizedRoot = dirname(directoryPath);
+    const expectedManifestName = artifactPackage.format === "package"
+      ? "MANIFEST.md"
+      : kind === "agent"
+        ? "AGENT.md"
+        : kind === "sub-agent"
+          ? "SUB_AGENT.md"
+          : "SKILL.md";
     const titleLine = content.split("\n").find((line) => line.startsWith("# ")) || "";
 
     checks.push({
@@ -62,8 +86,13 @@ export class DelegationArtifactValidator {
       details: `Esperado: ${expectedRoot}`,
     });
     checks.push({
+      label: "artifact-format",
+      ok: true,
+      details: `Formato detectado: ${artifactPackage.format}`,
+    });
+    checks.push({
       label: "canonical-filename",
-      ok: basename(resolvedPath) === expectedManifestName,
+      ok: basename(manifestDocument.path) === expectedManifestName,
       details: `Esperado: ${expectedManifestName}`,
     });
     checks.push({
@@ -86,6 +115,22 @@ export class DelegationArtifactValidator {
       ok: titleLine.trim() === `# ${folderName}`,
       details: `Título encontrado: ${titleLine || "ausente"}`,
     });
+
+    if (artifactPackage.format === "package") {
+      definition.packageDocuments.forEach((document) => {
+        const packageDocument = artifactPackage.documents.find((item) => item.role === document.role);
+        checks.push({
+          label: `document-${document.role}-present`,
+          ok: Boolean(packageDocument),
+          details: `Arquivo esperado: ${document.fileName}`,
+        });
+        checks.push({
+          label: `document-${document.role}-non-empty`,
+          ok: Boolean(packageDocument?.content.trim()),
+          details: `${document.fileName} precisa ter conteúdo.`,
+        });
+      });
+    }
 
     if (kind === "skill") {
       checks.push({
@@ -113,7 +158,7 @@ export class DelegationArtifactValidator {
 
     return {
       valid: checks.every((check) => check.ok),
-      manifestPath: resolvedPath,
+      manifestPath: manifestDocument.path,
       checks,
     };
   }

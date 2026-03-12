@@ -1642,7 +1642,6 @@ const html = `<!DOCTYPE html>
         <article class="panel section page-panel" data-view-panel="artifacts">
           <div class="section-head">
             <h2>Artifacts</h2>
-            <p>Gestão completa de agents, sub-agents e skills, incluindo acesso, manifesto e edição manual.</p>
           </div>
           <div class="artifact-toolbar">
             <label>
@@ -1663,7 +1662,6 @@ const html = `<!DOCTYPE html>
             <div class="artifact-stack">
               <section class="settings-card">
                 <h3>Factory de Artifacts</h3>
-                <p>Crie agents, sub-agents e skills diretamente do painel usando os templates oficiais da LiNa, com validação imediata do manifest gerado.</p>
                 <form class="settings-form" id="artifact-factory-form">
                   <label>
                     Tipo
@@ -1691,13 +1689,11 @@ const html = `<!DOCTYPE html>
               </section>
               <section class="settings-card">
                 <h3>Catálogo Atual</h3>
-                <p>Itens já criados, com acesso efetivo e caminho do manifest.</p>
                 <div class="artifact-list" id="artifacts-feed"></div>
               </section>
             </div>
             <section class="settings-card artifact-editor">
-              <h3>Manifest Editor</h3>
-              <p>Abra, revise e modifique manualmente o arquivo que define o artifact selecionado, com apoio de metadados estruturados e preview de diff antes do save.</p>
+              <h3>Editor</h3>
               <div class="composer-result" id="artifact-editor-summary">Selecione um artifact para começar.</div>
               <form class="settings-form" id="artifact-editor-form">
                 <div class="artifact-structured-grid">
@@ -1720,14 +1716,19 @@ const html = `<!DOCTYPE html>
                 </div>
                 <div class="artifact-inline-actions">
                   <button class="task-action" id="artifact-editor-apply-structured" type="button">Aplicar metadados no manifest</button>
+                  <button class="task-action" id="artifact-editor-migrate-legacy" type="button">Migrar legado</button>
                 </div>
                 <p class="artifact-inline-note">Os campos acima atualizam o frontmatter. O editor raw continua como fonte final para ajustes manuais.</p>
+                <label>
+                  Documento
+                  <select id="artifact-editor-document" class="control"></select>
+                </label>
                 <label>
                   Caminho do arquivo
                   <input id="artifact-editor-path" class="control" type="text" readonly />
                 </label>
                 <label>
-                  Conteúdo do manifest
+                  Conteúdo
                   <textarea id="artifact-editor-content" class="control" placeholder="O conteúdo do manifest aparecerá aqui."></textarea>
                 </label>
                 <label>
@@ -1887,6 +1888,7 @@ const html = `<!DOCTYPE html>
         logs: "/api/logs?limit=30",
         delegationCatalog: "/api/delegation/catalog",
         delegationFactory: "/api/delegation/factory",
+        delegationMigrateLegacy: "/api/delegation/migrate-legacy",
         delegationArtifactContent: "/api/delegation/artifact-content",
         authState: "/dashboard/auth/state",
         authBootstrapToggle: "/dashboard/auth/bootstrap-toggle",
@@ -1907,6 +1909,7 @@ const html = `<!DOCTYPE html>
         activeView: "overview",
         theme: localStorage.getItem("lina-dashboard-theme") || "dark",
         activeArtifactPath: "",
+        activeArtifactDocumentPath: "",
         artifactEditorLoadedPath: "",
         artifactEditorOriginalContent: "",
         artifactEditorDraftContent: "",
@@ -2261,6 +2264,32 @@ const html = `<!DOCTYPE html>
         ...((catalog?.skills || []).map((item) => ({ ...item, kind: "skill" }))),
       ];
 
+      const getArtifactDocuments = (artifact) =>
+        Array.isArray(artifact?.documents) && artifact.documents.length
+          ? artifact.documents
+          : artifact?.path
+            ? [
+                {
+                  role: "manifest",
+                  title: "Manifest",
+                  path: artifact.path,
+                  content: artifact.content || "",
+                },
+              ]
+            : [];
+
+      const getSelectedArtifactDocument = (artifact) => {
+        const documents = getArtifactDocuments(artifact);
+        if (!documents.length) {
+          return null;
+        }
+
+        return (
+          documents.find((document) => document.path === dashboardState.activeArtifactDocumentPath) ||
+          documents[0]
+        );
+      };
+
       const getArtifactFilters = () => ({
         kind: document.getElementById("artifact-filter-kind").value.trim(),
         query: document.getElementById("artifact-filter-query").value.trim().toLowerCase(),
@@ -2388,10 +2417,12 @@ const html = `<!DOCTYPE html>
         const feed = document.getElementById("artifacts-feed");
         const summary = document.getElementById("artifact-editor-summary");
         const editorPath = document.getElementById("artifact-editor-path");
+        const editorDocument = document.getElementById("artifact-editor-document");
         const editorName = document.getElementById("artifact-editor-name");
         const editorKind = document.getElementById("artifact-editor-kind");
         const editorAccessible = document.getElementById("artifact-editor-accessible");
         const editorEditable = document.getElementById("artifact-editor-editable");
+        const migrateLegacyButton = document.getElementById("artifact-editor-migrate-legacy");
         const resultBox = document.getElementById("artifact-editor-result");
         const artifacts = flattenArtifactCatalog(catalog);
         const filters = getArtifactFilters();
@@ -2406,7 +2437,9 @@ const html = `<!DOCTYPE html>
               safeText(artifact.description).toLowerCase().includes(filters.query) ||
               safeText(access.access).toLowerCase().includes(filters.query) ||
               safeText(access.editable).toLowerCase().includes(filters.query) ||
-              safeText(artifact.path).toLowerCase().includes(filters.query);
+              getArtifactDocuments(artifact).some((document) =>
+                safeText(document.path).toLowerCase().includes(filters.query)
+              );
             return kindMatch && queryMatch;
           })
           .sort((left, right) => String(left.name).localeCompare(String(right.name)));
@@ -2415,10 +2448,13 @@ const html = `<!DOCTYPE html>
           renderEmpty(feed, "Nenhum artifact corresponde aos filtros atuais.");
           summary.textContent = "Selecione um artifact para começar.";
           editorPath.value = "";
+          editorDocument.innerHTML = "";
           editorName.value = "";
           editorKind.value = "";
           editorAccessible.value = "";
           editorEditable.value = "";
+          migrateLegacyButton.style.display = "none";
+          dashboardState.activeArtifactDocumentPath = "";
           dashboardState.artifactEditorLoadedPath = "";
           dashboardState.artifactEditorOriginalContent = "";
           dashboardState.artifactEditorDraftContent = "";
@@ -2433,11 +2469,21 @@ const html = `<!DOCTYPE html>
         const selectedArtifact =
           filteredArtifacts.find((artifact) => artifact.path === dashboardState.activeArtifactPath) ||
           filteredArtifacts[0];
+        const selectedDocument = getSelectedArtifactDocument(selectedArtifact);
         const selectedAccess = getArtifactAccessText(selectedArtifact);
+
+        if (!selectedDocument) {
+          renderEmpty(feed, "Artifact sem documento disponível.");
+          return;
+        }
+
+        dashboardState.activeArtifactDocumentPath = selectedDocument.path;
+        migrateLegacyButton.style.display = selectedArtifact.format === "legacy" ? "" : "none";
 
         feed.innerHTML = filteredArtifacts.map((artifact) => {
           const access = getArtifactAccessText(artifact);
           const isActive = artifact.path === dashboardState.activeArtifactPath;
+          const documents = getArtifactDocuments(artifact);
           return \`
             <article class="artifact-item \${isActive ? "active" : ""}" data-artifact-path="\${escapeHtml(artifact.path)}">
               <div class="feed-meta">
@@ -2447,6 +2493,8 @@ const html = `<!DOCTYPE html>
               <div class="feed-title">\${escapeHtml(artifact.name)}</div>
               <div class="feed-body">\${escapeHtml(artifact.description)}</div>
               <div class="artifact-meta">
+                <span class="artifact-chip">\${escapeHtml(artifact.format || "legacy")}</span>
+                <span class="artifact-chip">\${escapeHtml(documents.length)} docs</span>
                 <span class="artifact-chip">acesso: \${escapeHtml(access.access)}</span>
                 <span class="artifact-chip">edição: \${escapeHtml(access.editable)}</span>
               </div>
@@ -2454,20 +2502,28 @@ const html = `<!DOCTYPE html>
           \`;
         }).join("");
 
+        editorDocument.innerHTML = getArtifactDocuments(selectedArtifact)
+          .map((document) => {
+            const isSelected = document.path === selectedDocument.path;
+            return '<option value="' + escapeHtml(document.path) + '"' + (isSelected ? " selected" : "") + '>' + escapeHtml(document.title || document.role || document.path) + "</option>";
+          })
+          .join("");
         summary.innerHTML = [
           '<strong>' + escapeHtml(selectedArtifact.name) + '</strong>',
           'tipo: ' + escapeHtml(selectedArtifact.kind),
           'acesso: ' + escapeHtml(selectedAccess.access),
           'edição: ' + escapeHtml(selectedAccess.editable),
-          'arquivo: ' + escapeHtml(selectedArtifact.path),
+          'formato: ' + escapeHtml(selectedArtifact.format || "legacy"),
+          'documento: ' + escapeHtml(selectedDocument.title || selectedDocument.role || "Manifest"),
+          'arquivo: ' + escapeHtml(selectedDocument.path),
         ].join('<br />');
-        editorPath.value = selectedArtifact.path || "";
-        if (dashboardState.artifactEditorLoadedPath !== selectedArtifact.path) {
-          dashboardState.artifactEditorLoadedPath = selectedArtifact.path || "";
-          dashboardState.artifactEditorOriginalContent = normalizeNewlines(selectedArtifact.content || "");
+        editorPath.value = selectedDocument.path || "";
+        if (dashboardState.artifactEditorLoadedPath !== selectedDocument.path) {
+          dashboardState.artifactEditorLoadedPath = selectedDocument.path || "";
+          dashboardState.artifactEditorOriginalContent = normalizeNewlines(selectedDocument.content || "");
           resultBox.textContent = "Nenhuma alteração salva nesta sessão.";
         }
-        updateArtifactEditorDraft(selectedArtifact.content || "", selectedArtifact);
+        updateArtifactEditorDraft(selectedDocument.content || "", selectedArtifact);
       };
 
       const getTelegramFilters = () => ({
@@ -2534,6 +2590,7 @@ const html = `<!DOCTYPE html>
         setElementDisabled("#artifact-editor-editable", !canManageArtifacts);
         setElementDisabled("#artifact-editor-content", !canManageArtifacts);
         setElementDisabled("#artifact-editor-apply-structured", !canManageArtifacts);
+        setElementDisabled("#artifact-editor-migrate-legacy", !canManageArtifacts);
         setElementDisabled('#artifact-factory-form button[type="submit"]', !canManageArtifacts);
         setElementDisabled('#artifact-editor-form button[type="submit"]', !canManageArtifacts);
 
@@ -3325,14 +3382,14 @@ const html = `<!DOCTYPE html>
           dashboardState.artifactEditorDraftContent = normalizeNewlines(contentInput.value);
           renderArtifactDiffPreview();
           resultBox.textContent = payload.validation?.valid
-            ? "Manifest salvo com validação ok."
-            : "Manifest salvo com pendências de validação.";
+            ? "Documento salvo com validação ok."
+            : "Documento salvo com pendências de validação.";
 
           const refreshedCatalog = await fetchJson(endpoints.delegationCatalog);
           dashboardState.artifactCatalog = refreshedCatalog;
           renderArtifacts(dashboardState.artifactCatalog);
         } catch (error) {
-          resultBox.textContent = error instanceof Error ? error.message : "Falha ao salvar manifest";
+          resultBox.textContent = error instanceof Error ? error.message : "Falha ao salvar documento";
         }
       });
       document.getElementById("artifact-editor-apply-structured").addEventListener("click", () => {
@@ -3352,11 +3409,46 @@ const html = `<!DOCTYPE html>
         });
         resultBox.textContent = "Metadados estruturados aplicados no manifest. Revise o diff antes de salvar.";
       });
+      document.getElementById("artifact-editor-migrate-legacy").addEventListener("click", async () => {
+        const resultBox = document.getElementById("artifact-editor-result");
+        const selectedArtifact =
+          flattenArtifactCatalog(dashboardState.artifactCatalog).find(
+            (artifact) => artifact.path === dashboardState.activeArtifactPath
+          ) || null;
+
+        if (!selectedArtifact) {
+          resultBox.textContent = "Selecione um artifact antes de migrar.";
+          return;
+        }
+
+        if (selectedArtifact.format !== "legacy") {
+          resultBox.textContent = "O artifact selecionado já está no formato package.";
+          return;
+        }
+
+        resultBox.textContent = "Migrando artifact legado...";
+
+        try {
+          await sendJson(endpoints.delegationMigrateLegacy, "POST", {
+            kind: selectedArtifact.kind,
+            directoryPath: selectedArtifact.directoryPath,
+          });
+          dashboardState.activeArtifactDocumentPath = "";
+          await refresh();
+          resultBox.textContent = "Artifact legado migrado para package.";
+        } catch (error) {
+          resultBox.textContent = error instanceof Error ? error.message : "Falha ao migrar artifact legado";
+        }
+      });
       document.getElementById("artifact-editor-content").addEventListener("input", (event) => {
         updateArtifactEditorDraft(event.target.value, {
           kind: document.getElementById("artifact-editor-kind").value,
           name: document.getElementById("artifact-editor-name").value,
         });
+      });
+      document.getElementById("artifact-editor-document").addEventListener("change", (event) => {
+        dashboardState.activeArtifactDocumentPath = event.target.value || "";
+        renderArtifacts(dashboardState.artifactCatalog);
       });
       document.getElementById("task-form").addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -3471,6 +3563,7 @@ const html = `<!DOCTYPE html>
         }
 
         dashboardState.activeArtifactPath = card.dataset.artifactPath || "";
+        dashboardState.activeArtifactDocumentPath = "";
         renderArtifacts(dashboardState.artifactCatalog);
       });
 

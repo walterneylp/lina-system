@@ -10,14 +10,28 @@ export const parseFrontmatter = (
     return {};
   }
 
-  return match[1]
+  const metadata: Record<string, ManifestValue> = {};
+  let activeListKey: string | null = null;
+
+  match[1]
     .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .reduce<Record<string, ManifestValue>>((metadata, line) => {
+    .forEach((rawLine) => {
+      const line = rawLine.trim();
+      if (!line) {
+        return;
+      }
+
+      const listMatch = line.match(/^-\s*(.+?)\s*$/);
+      if (listMatch && activeListKey) {
+        const current = Array.isArray(metadata[activeListKey]) ? metadata[activeListKey] : [];
+        metadata[activeListKey] = current.concat(listMatch[1].trim().replace(/^"|"$/g, ""));
+        return;
+      }
+
+      activeListKey = null;
       const separatorIndex = line.indexOf(":");
       if (separatorIndex < 0) {
-        return metadata;
+        return;
       }
 
       const key = line.slice(0, separatorIndex).trim();
@@ -29,12 +43,19 @@ export const parseFrontmatter = (
           .split(",")
           .map((value) => value.trim().replace(/^"|"$/g, ""))
           .filter(Boolean);
-        return metadata;
+        return;
+      }
+
+      if (!rawValue) {
+        metadata[key] = [];
+        activeListKey = key;
+        return;
       }
 
       metadata[key] = rawValue.replace(/^"|"$/g, "");
-      return metadata;
-    }, {});
+    });
+
+  return metadata;
 };
 
 export const asString = (

@@ -1,14 +1,11 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { asString, asStringArray, parseFrontmatter } from "../catalog/manifest-parser";
 import { AgentKind, AgentMetadata } from "./agent.types";
+import { listArtifactPackageDocuments } from "../catalog/artifact-package";
 
 export class AgentLoader {
-  constructor(
-    private readonly rootDirectory: string,
-    private readonly manifestName: "AGENT.md" | "SUB_AGENT.md",
-    private readonly kind: AgentKind
-  ) {}
+  constructor(private readonly rootDirectory: string, private readonly kind: AgentKind) {}
 
   public load(): AgentMetadata[] {
     if (!existsSync(this.rootDirectory)) {
@@ -17,13 +14,20 @@ export class AgentLoader {
 
     return readdirSync(this.rootDirectory, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
-      .map((entry) => join(this.rootDirectory, entry.name, this.manifestName))
-      .filter((manifestPath) => existsSync(manifestPath))
-      .map((manifestPath) => {
-        const content = readFileSync(manifestPath, "utf8");
+      .map((entry) => join(this.rootDirectory, entry.name))
+      .flatMap((directoryPath) => {
+        const artifactPackage = listArtifactPackageDocuments(this.kind, directoryPath);
+        if (!artifactPackage) {
+          return [];
+        }
+
+        const manifestDocument =
+          artifactPackage.documents.find((document) => document.role === "manifest") ||
+          artifactPackage.documents[0];
+        const content = manifestDocument?.content || "";
         const metadata = parseFrontmatter(content);
 
-        return {
+        return [{
           name: asString(metadata.name, "unknown-agent"),
           description: asString(metadata.description, "No description provided."),
           kind: this.kind,
@@ -39,10 +43,13 @@ export class AgentLoader {
           editableBy: asStringArray(metadata.editable_by).length
             ? asStringArray(metadata.editable_by)
             : ["Admin"],
-          path: manifestPath,
+          format: artifactPackage.format,
+          directoryPath,
+          path: manifestDocument.path,
           version: asString(metadata.version, ""),
           content,
-        };
+          documents: artifactPackage.documents,
+        }];
       });
   }
 }
