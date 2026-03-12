@@ -1081,6 +1081,12 @@ const html = `<!DOCTYPE html>
         gap: 18px;
       }
 
+      .artifact-top-stack {
+        display: grid;
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+
       .artifact-stack {
         display: grid;
         gap: 18px;
@@ -1682,10 +1688,10 @@ const html = `<!DOCTYPE html>
         </article>
 
         <article class="panel section page-panel" data-view-panel="artifacts">
-          <div class="section-head">
-            <h2>Artifacts</h2>
-          </div>
-          <div class="artifact-toolbar">
+        <div class="section-head">
+          <h2>Artifacts</h2>
+        </div>
+        <div class="artifact-toolbar">
             <label>
               Tipo
               <select id="artifact-filter-kind" class="control">
@@ -1700,6 +1706,41 @@ const html = `<!DOCTYPE html>
               <input id="artifact-filter-query" class="control" type="text" placeholder="nome, descrição, acesso..." />
             </label>
           </div>
+          <div class="artifact-top-stack">
+          <section class="settings-card">
+            <h3>Arquitetar Artifact</h3>
+            <form class="settings-form" id="artifact-architect-form">
+              <label>
+                Tipo desejado
+                <select id="artifact-architect-kind" class="control">
+                  <option value="agent">agent</option>
+                  <option value="sub-agent">sub-agent</option>
+                  <option value="skill">skill</option>
+                </select>
+              </label>
+              <label>
+                Objetivo
+                <input id="artifact-architect-goal" class="control" type="text" placeholder="O que esse artifact deve fazer" required />
+              </label>
+              <label>
+                Problema que resolve
+                <textarea id="artifact-architect-problem" class="control" placeholder="Qual problema operacional esse artifact resolve" required></textarea>
+              </label>
+              <label>
+                Contexto
+                <textarea id="artifact-architect-context" class="control" placeholder="Contexto, exemplos, público, ambiente"></textarea>
+              </label>
+              <label>
+                Restrições
+                <textarea id="artifact-architect-constraints" class="control" placeholder="Limites, regras, integrações, exclusões"></textarea>
+              </label>
+              <div class="artifact-inline-actions">
+                <button class="task-action" type="submit">Arquitetar</button>
+                <button class="task-action" id="artifact-architect-apply" type="button">Usar sugestão na criação</button>
+              </div>
+            </form>
+            <div class="composer-result" id="artifact-architect-result">Nenhuma sugestão gerada nesta sessão.</div>
+          </section>
           <section class="settings-card artifact-create-card">
             <h3>Criar Artifact</h3>
             <form class="artifact-create-form" id="artifact-factory-form">
@@ -1727,6 +1768,7 @@ const html = `<!DOCTYPE html>
             </form>
             <div class="composer-result" id="artifact-factory-result">Nenhum artifact criado nesta sessão.</div>
           </section>
+          </div>
           <div class="artifact-layout">
             <div class="artifact-stack">
               <section class="settings-card">
@@ -1929,6 +1971,7 @@ const html = `<!DOCTYPE html>
         executions: "/api/executions?limit=30",
         logs: "/api/logs?limit=30",
         delegationCatalog: "/api/delegation/catalog",
+        delegationArchitect: "/api/delegation/architect",
         delegationFactory: "/api/delegation/factory",
         delegationMigrateLegacy: "/api/delegation/migrate-legacy",
         delegationArtifactContent: "/api/delegation/artifact-content",
@@ -1947,6 +1990,7 @@ const html = `<!DOCTYPE html>
         executions: [],
         logs: [],
         artifactCatalog: { agents: [], subAgents: [], skills: [] },
+        artifactArchitecture: null,
         auth: null,
         activeView: "overview",
         theme: localStorage.getItem("lina-dashboard-theme") || "dark",
@@ -2208,6 +2252,93 @@ const html = `<!DOCTYPE html>
             )
           )
           .join("\\n");
+      };
+
+      const renderArtifactArchitecture = (payload) => {
+        const architecture = payload?.architecture;
+
+        if (!architecture) {
+          return "Nenhuma sugestão retornada.";
+        }
+
+        return [
+          "Provider: " + safeText(payload?.provider),
+          "Tipo recomendado: " + safeText(architecture.recommendedKind),
+          "Nome: " + safeText(architecture.name),
+          "Descrição: " + safeText(architecture.description),
+          "",
+          "Rationale:",
+          safeText(architecture.rationale),
+          "",
+          "Objetivo:",
+          safeText(architecture.objective),
+          "",
+          "Responsabilidades:",
+          ...(architecture.responsibilities || []).map((item) => "- " + safeText(item)),
+          "",
+          "Limites:",
+          ...(architecture.boundaries || []).map((item) => "- " + safeText(item)),
+          "",
+          "Triggers:",
+          ...(architecture.triggers || []).map((item) => "- " + safeText(item)),
+          "",
+          "Inputs:",
+          ...(architecture.inputs || []).map((item) => "- " + safeText(item)),
+          "",
+          "Outputs:",
+          ...(architecture.outputs || []).map((item) => "- " + safeText(item)),
+          "",
+          "Prompt base:",
+          safeText(architecture.promptBase),
+        ].join("\\n");
+      };
+
+      const setArtifactArchitectureState = (payload) => {
+        dashboardState.artifactArchitecture = payload || null;
+        const resultBox = document.getElementById("artifact-architect-result");
+        const applyButton = document.getElementById("artifact-architect-apply");
+
+        if (resultBox) {
+          if (payload) {
+            resultBox.dataset.architecture = JSON.stringify(payload);
+          } else {
+            delete resultBox.dataset.architecture;
+          }
+        }
+
+        if (applyButton) {
+          applyButton.disabled = !payload;
+        }
+      };
+
+      const applyArchitectSuggestionToFactory = () => {
+        let payload = dashboardState.artifactArchitecture;
+
+        if (!payload) {
+          const resultBox = document.getElementById("artifact-architect-result");
+          const serialized = resultBox?.dataset?.architecture || "";
+          if (serialized) {
+            try {
+              payload = JSON.parse(serialized);
+            } catch (error) {
+              payload = null;
+            }
+          }
+        }
+
+        const architecture = payload?.architecture;
+        if (!architecture) {
+          return false;
+        }
+
+        const kindInput = document.getElementById("artifact-kind");
+        const nameInput = document.getElementById("artifact-name");
+        const descriptionInput = document.getElementById("artifact-description");
+
+        kindInput.value = architecture.recommendedKind || "agent";
+        nameInput.value = architecture.name || "";
+        descriptionInput.value = architecture.description || "";
+        return true;
       };
 
       const listEnabledPermissions = (permissions) =>
@@ -2612,6 +2743,7 @@ const html = `<!DOCTYPE html>
 
         setElementVisibility("#create-user-form", canManageUsers);
         setElementVisibility("#manage-user-form", canManageUsers);
+        setElementVisibility("#artifact-architect-form", canManageArtifacts);
         setElementVisibility("#artifact-factory-form", canManageArtifacts);
         setElementVisibility("#artifact-editor-form", canManageArtifacts);
         setElementVisibility("#bootstrap-toggle-button", canManageBootstrap);
@@ -2628,6 +2760,13 @@ const html = `<!DOCTYPE html>
         setElementDisabled("#artifact-name", !canManageArtifacts);
         setElementDisabled("#artifact-description", !canManageArtifacts);
         setElementDisabled("#artifact-overwrite", !canManageArtifacts);
+        setElementDisabled("#artifact-architect-kind", !canManageArtifacts);
+        setElementDisabled("#artifact-architect-goal", !canManageArtifacts);
+        setElementDisabled("#artifact-architect-problem", !canManageArtifacts);
+        setElementDisabled("#artifact-architect-context", !canManageArtifacts);
+        setElementDisabled("#artifact-architect-constraints", !canManageArtifacts);
+        setElementDisabled('#artifact-architect-form button[type="submit"]', !canManageArtifacts);
+        setElementDisabled("#artifact-architect-apply", !canManageArtifacts);
         setElementDisabled("#artifact-editor-accessible", !canManageArtifacts);
         setElementDisabled("#artifact-editor-editable", !canManageArtifacts);
         setElementDisabled("#artifact-editor-content", !canManageArtifacts);
@@ -3401,6 +3540,47 @@ const html = `<!DOCTYPE html>
           resultBox.textContent = error instanceof Error ? error.message : "Falha ao criar artifact";
         }
       });
+      document.getElementById("artifact-architect-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const resultBox = document.getElementById("artifact-architect-result");
+        const requestedKind = document.getElementById("artifact-architect-kind").value;
+        const goal = document.getElementById("artifact-architect-goal").value.trim();
+        const problem = document.getElementById("artifact-architect-problem").value.trim();
+        const context = document.getElementById("artifact-architect-context").value.trim();
+        const constraints = document.getElementById("artifact-architect-constraints").value.trim();
+
+        if (!requestedKind || !goal || !problem) {
+          setArtifactArchitectureState(null);
+          resultBox.textContent = "Preencha tipo desejado, objetivo e problema.";
+          return;
+        }
+
+        resultBox.textContent = "Arquitetando artifact...";
+
+        try {
+          const payload = await sendJson(endpoints.delegationArchitect, "POST", {
+            requestedKind,
+            goal,
+            problem,
+            context: context || null,
+            constraints: constraints || null,
+          });
+          setArtifactArchitectureState(payload);
+          resultBox.textContent = renderArtifactArchitecture(payload);
+        } catch (error) {
+          setArtifactArchitectureState(null);
+          resultBox.textContent = error instanceof Error ? error.message : "Falha ao arquitetar artifact";
+        }
+      });
+      document.getElementById("artifact-architect-apply").addEventListener("click", () => {
+        const resultBox = document.getElementById("artifact-architect-result");
+        if (!applyArchitectSuggestionToFactory()) {
+          resultBox.textContent = "Gere uma sugestão antes de aplicar na criação.";
+          return;
+        }
+        resultBox.textContent = "Sugestão aplicada no formulário de criação.";
+      });
       document.getElementById("artifact-editor-form").addEventListener("submit", async (event) => {
         event.preventDefault();
 
@@ -4008,6 +4188,11 @@ const server = createServer(async (request, response) => {
       }
 
       if (url === "/api/delegation/factory" && method === "POST" && !hasPermission(authContext, "manageArtifacts")) {
+        sendJson(response, 403, { error: "Forbidden" });
+        return;
+      }
+
+      if (url === "/api/delegation/architect" && method === "POST" && !hasPermission(authContext, "manageArtifacts")) {
         sendJson(response, 403, { error: "Forbidden" });
         return;
       }

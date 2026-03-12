@@ -127,7 +127,8 @@ export class TelegramInputHandler {
 
     await this.options.client.sendChatAction(chatId, "typing");
 
-    const result = await this.options.orchestrator.handle({ text });
+    const runtimeContext = await this.buildRuntimeContext(chatId, metadata);
+    const result = await this.options.orchestrator.handle({ text, runtimeContext });
     const finalAnswer = await this.ensurePortugueseAnswer(result.answer);
 
     await this.options.memoryManager.append("assistant", finalAnswer, {
@@ -142,6 +143,51 @@ export class TelegramInputHandler {
       transportMessageId: null,
     });
     await this.options.outputHandler.sendText(chatId, finalAnswer);
+  }
+
+  private async buildRuntimeContext(
+    chatId: string,
+    metadata?: ConversationMessageMetadata
+  ): Promise<string> {
+    const persistence = await this.options.memoryManager.getHealth();
+    const recentConversation = await this.options.memoryManager.getRecentConversation({
+      limit: 8,
+      source: "telegram",
+      chatId,
+      userId: metadata?.userId || null,
+    });
+
+    const serializedConversation = recentConversation.map((message) => ({
+      role: message.role,
+      content: message.content,
+      createdAt: message.createdAt,
+      source: message.metadata?.source || null,
+      chatId: message.metadata?.chatId || null,
+      userId: message.metadata?.userId || null,
+      username: message.metadata?.username || null,
+      messageType: message.metadata?.messageType || null,
+    }));
+
+    return JSON.stringify(
+      {
+        channel: "telegram",
+        persistence,
+        integrations: {
+          email: {
+            configured: false,
+            reason: "Nao existe integracao operacional de email implementada no backend atual da LiNa.",
+            supportedNextSteps: [
+              "configurar integracao Gmail ou Outlook",
+              "conectar um provedor de email com autorizacao segura",
+              "colar emails manualmente para resumo temporario",
+            ],
+          },
+        },
+        recentConversation: serializedConversation,
+      },
+      null,
+      2
+    );
   }
 
   private async processAudio(

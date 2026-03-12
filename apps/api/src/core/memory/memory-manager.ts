@@ -43,6 +43,33 @@ export class MemoryManager {
     return this.store.listMessages();
   }
 
+  public async getRecentConversation(options?: {
+    limit?: number;
+    source?: ConversationMessageMetadata["source"];
+    chatId?: string | null;
+    userId?: string | null;
+  }): Promise<ConversationMessage[]> {
+    const messages = await this.store.listMessages();
+    const filtered = messages.filter((message) => {
+      if (options?.source && message.metadata?.source !== options.source) {
+        return false;
+      }
+
+      if (options?.chatId && message.metadata?.chatId !== options.chatId) {
+        return false;
+      }
+
+      if (options?.userId && message.metadata?.userId !== options.userId) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const limit = options?.limit || 8;
+    return filtered.slice(-limit);
+  }
+
   public async createTask(task: LinaTaskRecord): Promise<LinaTaskRecord> {
     return this.store.createTask(task);
   }

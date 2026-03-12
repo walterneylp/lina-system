@@ -6,7 +6,13 @@ Diretório oficial para agents delegáveis da LiNa.
 
 Cada agent deve viver em sua própria pasta:
 
-`.agents/agents/<agent-name>/AGENT.md`
+`.agents/agents/<agent-name>/`
+
+Arquivos canônicos:
+
+- `MANIFEST.md`
+- `IDENTITY.md`
+- `OPERATIONS.md`
 
 ## Requisitos mínimos do frontmatter
 

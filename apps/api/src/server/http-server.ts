@@ -90,6 +90,107 @@ const getArtifactByPath = (dependencies: HttpServerDependencies, manifestPath: s
   );
 };
 
+const extractJsonObject = (value: string): Record<string, unknown> => {
+  const trimmed = value.trim();
+
+  const directStart = trimmed.indexOf("{");
+  const directEnd = trimmed.lastIndexOf("}");
+  if (directStart !== -1 && directEnd !== -1 && directEnd > directStart) {
+    const candidate = trimmed.slice(directStart, directEnd + 1);
+    return JSON.parse(candidate) as Record<string, unknown>;
+  }
+
+  throw new Error("Model did not return a valid JSON object.");
+};
+
+const asTextArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.map((item) => String(item).trim()).filter(Boolean)
+    : [];
+
+const buildArtifactArchitecturePrompt = (input: {
+  requestedKind: string;
+  goal: string;
+  problem: string;
+  context?: string;
+  constraints?: string;
+  existingAgents: ReturnType<AgentLoader["load"]>;
+  existingSkills: ReturnType<SkillLoader["load"]>;
+}): string => {
+  const architectAgent = input.existingAgents.find(
+    (agent) => agent.name === "agent-prompt-architect-specialist"
+  );
+  const architectSkill = input.existingSkills.find(
+    (skill) => skill.name === "agent-prompt-architect"
+  );
+
+  const architectContext = [
+    "AGENT CONTEXT",
+    ...(architectAgent?.documents || []).map(
+      (document) => `## ${document.title}\n${document.content}`
+    ),
+    "",
+    "SKILL CONTEXT",
+    ...(architectSkill?.documents || []).map(
+      (document) => `## ${document.title}\n${document.content}`
+    ),
+  ].join("\n\n");
+
+  const existingCatalog = JSON.stringify(
+    {
+      agents: input.existingAgents.map((agent) => ({
+        name: agent.name,
+        description: agent.description,
+        role: agent.role,
+      })),
+      skills: input.existingSkills.map((skill) => ({
+        name: skill.name,
+        description: skill.description,
+        capabilities: skill.capabilities,
+      })),
+    },
+    null,
+    2
+  );
+
+  return [
+    "Você é o agent-prompt-architect-specialist da LiNa.",
+    "Sua tarefa é projetar um novo artifact realmente útil, evitando vagueza, duplicação e escopo ruim.",
+    "Responda SOMENTE com JSON válido, sem markdown, sem comentários extras.",
+    "",
+    architectContext,
+    "",
+    "EXISTING CATALOG",
+    existingCatalog,
+    "",
+    "REQUEST",
+    `requestedKind: ${input.requestedKind}`,
+    `goal: ${input.goal}`,
+    `problem: ${input.problem}`,
+    `context: ${input.context || "n/a"}`,
+    `constraints: ${input.constraints || "n/a"}`,
+    "",
+    "JSON schema esperado:",
+    JSON.stringify(
+      {
+        recommendedKind: "agent",
+        name: "nome-em-kebab-case",
+        description: "descrição curta e forte",
+        rationale: "por que esse artifact deve existir",
+        objective: "objetivo operacional",
+        responsibilities: ["item 1", "item 2"],
+        boundaries: ["item 1", "item 2"],
+        triggers: ["quando usar"],
+        inputs: ["input 1"],
+        outputs: ["output 1"],
+        promptBase: "prompt-base sugerido para esse artifact",
+      },
+      null,
+      2
+    ),
+  ].join("\n");
+};
+
 export const startHttpServer = (dependencies: HttpServerDependencies) => {
   const artifactFactory = new DelegationArtifactFactory({
     agentsDirectory: dependencies.env.agentsDirectory,
@@ -276,6 +377,73 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
 
         response.writeHead(200, { "Content-Type": "application/json" });
         response.end(JSON.stringify({ artifact, validation }));
+        return;
+      }
+
+      if (method === "POST" && url === "/delegation/architect") {
+        const rawBody = await readBody(request);
+        const payload = JSON.parse(rawBody || "{}") as {
+          requestedKind?: "agent" | "sub-agent" | "skill";
+          goal?: string;
+          problem?: string;
+          context?: string;
+          constraints?: string;
+        };
+
+        if (!payload.requestedKind || !payload.goal || !payload.problem) {
+          response.writeHead(400, { "Content-Type": "application/json" });
+          response.end(
+            JSON.stringify({
+              error: "Missing `requestedKind`, `goal` or `problem` in request body.",
+            })
+          );
+          return;
+        }
+
+        const agents = dependencies.agentLoader.load();
+        const skills = dependencies.skillLoader.load();
+        const prompt = buildArtifactArchitecturePrompt({
+          requestedKind: payload.requestedKind,
+          goal: payload.goal,
+          problem: payload.problem,
+          context: payload.context,
+          constraints: payload.constraints,
+          existingAgents: agents,
+          existingSkills: skills,
+        });
+
+        const llmResult = await dependencies.providerFactory.generate({
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.2,
+          maxTokens: 2048,
+        });
+
+        const architecture = extractJsonObject(llmResult.content);
+
+        await dependencies.memoryManager.log(
+          "info",
+          `[delegation-architect] ${payload.requestedKind} ${String(architecture.name || "unnamed")} via ${llmResult.provider}`
+        );
+
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(
+          JSON.stringify({
+            provider: llmResult.provider,
+            architecture: {
+              recommendedKind: String(architecture.recommendedKind || payload.requestedKind),
+              name: String(architecture.name || ""),
+              description: String(architecture.description || ""),
+              rationale: String(architecture.rationale || ""),
+              objective: String(architecture.objective || ""),
+              responsibilities: asTextArray(architecture.responsibilities),
+              boundaries: asTextArray(architecture.boundaries),
+              triggers: asTextArray(architecture.triggers),
+              inputs: asTextArray(architecture.inputs),
+              outputs: asTextArray(architecture.outputs),
+              promptBase: String(architecture.promptBase || ""),
+            },
+          })
+        );
         return;
       }
 
