@@ -1139,6 +1139,58 @@ const html = `<!DOCTYPE html>
         line-height: 1.6;
       }
 
+      .artifact-structured-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .artifact-structured-grid .artifact-full {
+        grid-column: 1 / -1;
+      }
+
+      .artifact-inline-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .artifact-inline-note {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .artifact-diff {
+        min-height: 180px;
+        max-height: 360px;
+        overflow: auto;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(8,12,18,0.78);
+        padding: 14px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.8rem;
+        line-height: 1.55;
+        white-space: pre-wrap;
+      }
+
+      .artifact-diff-line {
+        display: block;
+      }
+
+      .artifact-diff-line.add {
+        color: #9ef0b0;
+      }
+
+      .artifact-diff-line.remove {
+        color: #ffb2b2;
+      }
+
+      .artifact-diff-line.context {
+        color: rgba(255,255,255,0.72);
+      }
+
       .artifact-toolbar {
         display: flex;
         gap: 10px;
@@ -1653,9 +1705,31 @@ const html = `<!DOCTYPE html>
             </div>
             <section class="settings-card artifact-editor">
               <h3>Manifest Editor</h3>
-              <p>Abra, revise e modifique manualmente o arquivo que define o artifact selecionado.</p>
+              <p>Abra, revise e modifique manualmente o arquivo que define o artifact selecionado, com apoio de metadados estruturados e preview de diff antes do save.</p>
               <div class="composer-result" id="artifact-editor-summary">Selecione um artifact para começar.</div>
               <form class="settings-form" id="artifact-editor-form">
+                <div class="artifact-structured-grid">
+                  <label>
+                    Nome
+                    <input id="artifact-editor-name" class="control" type="text" readonly />
+                  </label>
+                  <label>
+                    Tipo
+                    <input id="artifact-editor-kind" class="control" type="text" readonly />
+                  </label>
+                  <label class="artifact-full">
+                    Pode ser acessado por
+                    <input id="artifact-editor-accessible" class="control" type="text" placeholder="LiNa, Admin, operator" />
+                  </label>
+                  <label class="artifact-full">
+                    Pode ser editado por
+                    <input id="artifact-editor-editable" class="control" type="text" placeholder="Admin" />
+                  </label>
+                </div>
+                <div class="artifact-inline-actions">
+                  <button class="task-action" id="artifact-editor-apply-structured" type="button">Aplicar metadados no manifest</button>
+                </div>
+                <p class="artifact-inline-note">Os campos acima atualizam o frontmatter. O editor raw continua como fonte final para ajustes manuais.</p>
                 <label>
                   Caminho do arquivo
                   <input id="artifact-editor-path" class="control" type="text" readonly />
@@ -1663,6 +1737,10 @@ const html = `<!DOCTYPE html>
                 <label>
                   Conteúdo do manifest
                   <textarea id="artifact-editor-content" class="control" placeholder="O conteúdo do manifest aparecerá aqui."></textarea>
+                </label>
+                <label>
+                  Preview do diff
+                  <div id="artifact-editor-diff" class="artifact-diff">Nenhuma alteração em relação ao arquivo original.</div>
                 </label>
                 <button class="task-action" id="artifact-editor-save" type="submit">Salvar manifest</button>
               </form>
@@ -1837,6 +1915,9 @@ const html = `<!DOCTYPE html>
         activeView: "overview",
         theme: localStorage.getItem("lina-dashboard-theme") || "dark",
         activeArtifactPath: "",
+        artifactEditorLoadedPath: "",
+        artifactEditorOriginalContent: "",
+        artifactEditorDraftContent: "",
       };
 
       const badgeClass = (value) => {
@@ -1857,6 +1938,193 @@ const html = `<!DOCTYPE html>
           .replaceAll(">", "&gt;")
           .replaceAll('"', "&quot;")
           .replaceAll("'", "&#39;");
+
+      const normalizeNewlines = (value) => String(value || "").replace(/\r\n/g, "\n");
+
+      const splitArtifactFrontmatter = (content) => {
+        const normalized = normalizeNewlines(content);
+        if (!normalized.startsWith("---\n")) {
+          return { hasFrontmatter: false, frontmatter: "", body: normalized };
+        }
+
+        const closingIndex = normalized.indexOf("\n---\n", 4);
+        if (closingIndex === -1) {
+          return { hasFrontmatter: false, frontmatter: "", body: normalized };
+        }
+
+        return {
+          hasFrontmatter: true,
+          frontmatter: normalized.slice(4, closingIndex),
+          body: normalized.slice(closingIndex + 5),
+        };
+      };
+
+      const parseArtifactMetadata = (content) => {
+        const { hasFrontmatter, frontmatter } = splitArtifactFrontmatter(content);
+        const metadata = {
+          hasFrontmatter,
+          accessibleBy: [],
+          editableBy: [],
+        };
+
+        if (!hasFrontmatter) {
+          return metadata;
+        }
+
+        let activeListKey = null;
+        frontmatter.split("\n").forEach((line) => {
+          const listMatch = line.match(/^\s*-\s*(.+?)\s*$/);
+          if (listMatch && activeListKey) {
+            metadata[activeListKey].push(listMatch[1].trim());
+            return;
+          }
+
+          activeListKey = null;
+          const fieldMatch = line.match(/^([a-zA-Z0-9_]+):\s*(.*)$/);
+          if (!fieldMatch) {
+            return;
+          }
+
+          const [, key, rawValue] = fieldMatch;
+          const value = rawValue.trim();
+          if (key === "name") {
+            metadata.name = value;
+            return;
+          }
+          if (key === "description") {
+            metadata.description = value;
+            return;
+          }
+          if (key === "version") {
+            metadata.version = value;
+            return;
+          }
+          if (key === "accessible_by" || key === "editable_by") {
+            const targetKey = key === "accessible_by" ? "accessibleBy" : "editableBy";
+            if (value.startsWith("[") && value.endsWith("]")) {
+              metadata[targetKey] = value
+                .slice(1, -1)
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean);
+              return;
+            }
+
+            if (value) {
+              metadata[targetKey] = [value];
+              return;
+            }
+
+            activeListKey = targetKey;
+          }
+        });
+
+        return metadata;
+      };
+
+      const normalizeStructuredList = (value, fallback) => {
+        const normalized = String(value || "")
+          .split(/[\n,]/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+        return normalized.length ? normalized : fallback;
+      };
+
+      const formatArtifactListField = (key, values) =>
+        [key + ":", ...values.map((value) => "  - " + value)].join("\n");
+
+      const upsertArtifactListField = (frontmatter, key, values) => {
+        const lines = normalizeNewlines(frontmatter).split("\n");
+        const nextLines = [];
+        let replaced = false;
+
+        for (let index = 0; index < lines.length; index += 1) {
+          const line = lines[index];
+          const fieldMatch = line.match(/^([a-zA-Z0-9_]+):\s*(.*)$/);
+          if (!fieldMatch || fieldMatch[1] !== key) {
+            nextLines.push(line);
+            continue;
+          }
+
+          replaced = true;
+          nextLines.push(...formatArtifactListField(key, values).split("\n"));
+          index += 1;
+          while (index < lines.length && /^\s*-\s+/.test(lines[index])) {
+            index += 1;
+          }
+          index -= 1;
+        }
+
+        if (!replaced) {
+          if (nextLines.length && nextLines[nextLines.length - 1] !== "") {
+            nextLines.push("");
+          }
+          nextLines.push(...formatArtifactListField(key, values).split("\n"));
+        }
+
+        return nextLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+      };
+
+      const applyArtifactStructuredFieldsToContent = (content, options) => {
+        const source = normalizeNewlines(content);
+        const { hasFrontmatter, frontmatter, body } = splitArtifactFrontmatter(source);
+        const accessibleBy = normalizeStructuredList(options.accessibleBy, ["LiNa"]);
+        const editableBy = normalizeStructuredList(options.editableBy, ["Admin"]);
+        const baseFrontmatter = hasFrontmatter ? frontmatter : "";
+        const withAccess = upsertArtifactListField(baseFrontmatter, "accessible_by", accessibleBy);
+        const finalFrontmatter = upsertArtifactListField(withAccess, "editable_by", editableBy);
+        const normalizedBody = hasFrontmatter ? body : source;
+        return ["---", finalFrontmatter, "---", normalizedBody.replace(/^\n*/, "")].join("\n");
+      };
+
+      const computeLineDiff = (beforeValue, afterValue) => {
+        const before = normalizeNewlines(beforeValue).split("\n");
+        const after = normalizeNewlines(afterValue).split("\n");
+        const rows = Array.from({ length: before.length + 1 }, () => Array(after.length + 1).fill(0));
+
+        for (let i = before.length - 1; i >= 0; i -= 1) {
+          for (let j = after.length - 1; j >= 0; j -= 1) {
+            if (before[i] === after[j]) {
+              rows[i][j] = rows[i + 1][j + 1] + 1;
+            } else {
+              rows[i][j] = Math.max(rows[i + 1][j], rows[i][j + 1]);
+            }
+          }
+        }
+
+        const diff = [];
+        let i = 0;
+        let j = 0;
+
+        while (i < before.length && j < after.length) {
+          if (before[i] === after[j]) {
+            diff.push({ type: "context", value: before[i] });
+            i += 1;
+            j += 1;
+            continue;
+          }
+
+          if (rows[i + 1][j] >= rows[i][j + 1]) {
+            diff.push({ type: "remove", value: before[i] });
+            i += 1;
+          } else {
+            diff.push({ type: "add", value: after[j] });
+            j += 1;
+          }
+        }
+
+        while (i < before.length) {
+          diff.push({ type: "remove", value: before[i] });
+          i += 1;
+        }
+
+        while (j < after.length) {
+          diff.push({ type: "add", value: after[j] });
+          j += 1;
+        }
+
+        return diff;
+      };
 
       const formatTime = (value) => {
         if (!value) return "Sem data";
@@ -2006,6 +2274,62 @@ const html = `<!DOCTYPE html>
         };
       };
 
+      const renderArtifactDiffPreview = () => {
+        const diffBox = document.getElementById("artifact-editor-diff");
+        if (!diffBox) {
+          return;
+        }
+
+        const original = dashboardState.artifactEditorOriginalContent || "";
+        const draft = dashboardState.artifactEditorDraftContent || "";
+        if (normalizeNewlines(original) === normalizeNewlines(draft)) {
+          diffBox.textContent = "Nenhuma alteração em relação ao arquivo original.";
+          return;
+        }
+
+        diffBox.innerHTML = computeLineDiff(original, draft)
+          .map((line) => {
+            const prefix = line.type === "add" ? "+" : line.type === "remove" ? "-" : " ";
+            return '<span class="artifact-diff-line ' + line.type + '">' + escapeHtml(prefix + " " + line.value) + "</span>";
+          })
+          .join("");
+      };
+
+      const syncArtifactStructuredInputs = (content, artifact) => {
+        const metadata = parseArtifactMetadata(content);
+        const access = metadata.accessibleBy.length ? metadata.accessibleBy : (artifact?.accessibleBy || ["LiNa"]);
+        const editable = metadata.editableBy.length ? metadata.editableBy : (artifact?.editableBy || ["Admin"]);
+
+        const nameInput = document.getElementById("artifact-editor-name");
+        const kindInput = document.getElementById("artifact-editor-kind");
+        const accessibleInput = document.getElementById("artifact-editor-accessible");
+        const editableInput = document.getElementById("artifact-editor-editable");
+
+        if (nameInput) {
+          nameInput.value = artifact?.name || metadata.name || "";
+        }
+        if (kindInput) {
+          kindInput.value = artifact?.kind || "";
+        }
+        if (accessibleInput) {
+          accessibleInput.value = access.join(", ");
+        }
+        if (editableInput) {
+          editableInput.value = editable.join(", ");
+        }
+      };
+
+      const updateArtifactEditorDraft = (content, artifact) => {
+        const normalized = normalizeNewlines(content);
+        dashboardState.artifactEditorDraftContent = normalized;
+        const editorContent = document.getElementById("artifact-editor-content");
+        if (editorContent && editorContent.value !== normalized) {
+          editorContent.value = normalized;
+        }
+        syncArtifactStructuredInputs(normalized, artifact);
+        renderArtifactDiffPreview();
+      };
+
       const buildExecutionRows = (execution) => {
         const delegation = parseDelegationSummary(execution.delegationSummary);
         const rows = [];
@@ -2059,7 +2383,11 @@ const html = `<!DOCTYPE html>
         const feed = document.getElementById("artifacts-feed");
         const summary = document.getElementById("artifact-editor-summary");
         const editorPath = document.getElementById("artifact-editor-path");
-        const editorContent = document.getElementById("artifact-editor-content");
+        const editorName = document.getElementById("artifact-editor-name");
+        const editorKind = document.getElementById("artifact-editor-kind");
+        const editorAccessible = document.getElementById("artifact-editor-accessible");
+        const editorEditable = document.getElementById("artifact-editor-editable");
+        const resultBox = document.getElementById("artifact-editor-result");
         const artifacts = flattenArtifactCatalog(catalog);
         const filters = getArtifactFilters();
 
@@ -2082,7 +2410,14 @@ const html = `<!DOCTYPE html>
           renderEmpty(feed, "Nenhum artifact corresponde aos filtros atuais.");
           summary.textContent = "Selecione um artifact para começar.";
           editorPath.value = "";
-          editorContent.value = "";
+          editorName.value = "";
+          editorKind.value = "";
+          editorAccessible.value = "";
+          editorEditable.value = "";
+          dashboardState.artifactEditorLoadedPath = "";
+          dashboardState.artifactEditorOriginalContent = "";
+          dashboardState.artifactEditorDraftContent = "";
+          renderArtifactDiffPreview();
           return;
         }
 
@@ -2122,7 +2457,12 @@ const html = `<!DOCTYPE html>
           'arquivo: ' + escapeHtml(selectedArtifact.path),
         ].join('<br />');
         editorPath.value = selectedArtifact.path || "";
-        editorContent.value = selectedArtifact.content || "";
+        if (dashboardState.artifactEditorLoadedPath !== selectedArtifact.path) {
+          dashboardState.artifactEditorLoadedPath = selectedArtifact.path || "";
+          dashboardState.artifactEditorOriginalContent = normalizeNewlines(selectedArtifact.content || "");
+          resultBox.textContent = "Nenhuma alteração salva nesta sessão.";
+        }
+        updateArtifactEditorDraft(selectedArtifact.content || "", selectedArtifact);
       };
 
       const getTelegramFilters = () => ({
@@ -2185,7 +2525,10 @@ const html = `<!DOCTYPE html>
         setElementDisabled("#artifact-name", !canManageArtifacts);
         setElementDisabled("#artifact-description", !canManageArtifacts);
         setElementDisabled("#artifact-overwrite", !canManageArtifacts);
+        setElementDisabled("#artifact-editor-accessible", !canManageArtifacts);
+        setElementDisabled("#artifact-editor-editable", !canManageArtifacts);
         setElementDisabled("#artifact-editor-content", !canManageArtifacts);
+        setElementDisabled("#artifact-editor-apply-structured", !canManageArtifacts);
         setElementDisabled('#artifact-factory-form button[type="submit"]', !canManageArtifacts);
         setElementDisabled('#artifact-editor-form button[type="submit"]', !canManageArtifacts);
 
@@ -2968,6 +3311,10 @@ const html = `<!DOCTYPE html>
             content: contentInput.value,
           });
 
+          dashboardState.artifactEditorLoadedPath = pathInput.value.trim();
+          dashboardState.artifactEditorOriginalContent = normalizeNewlines(contentInput.value);
+          dashboardState.artifactEditorDraftContent = normalizeNewlines(contentInput.value);
+          renderArtifactDiffPreview();
           resultBox.textContent = payload.validation?.valid
             ? "Manifest salvo com validação ok."
             : "Manifest salvo com pendências de validação.";
@@ -2978,6 +3325,29 @@ const html = `<!DOCTYPE html>
         } catch (error) {
           resultBox.textContent = error instanceof Error ? error.message : "Falha ao salvar manifest";
         }
+      });
+      document.getElementById("artifact-editor-apply-structured").addEventListener("click", () => {
+        const contentInput = document.getElementById("artifact-editor-content");
+        const accessibleInput = document.getElementById("artifact-editor-accessible");
+        const editableInput = document.getElementById("artifact-editor-editable");
+        const resultBox = document.getElementById("artifact-editor-result");
+
+        const nextContent = applyArtifactStructuredFieldsToContent(contentInput.value, {
+          accessibleBy: accessibleInput.value,
+          editableBy: editableInput.value,
+        });
+
+        updateArtifactEditorDraft(nextContent, {
+          kind: document.getElementById("artifact-editor-kind").value,
+          name: document.getElementById("artifact-editor-name").value,
+        });
+        resultBox.textContent = "Metadados estruturados aplicados no manifest. Revise o diff antes de salvar.";
+      });
+      document.getElementById("artifact-editor-content").addEventListener("input", (event) => {
+        updateArtifactEditorDraft(event.target.value, {
+          kind: document.getElementById("artifact-editor-kind").value,
+          name: document.getElementById("artifact-editor-name").value,
+        });
       });
       document.getElementById("task-form").addEventListener("submit", async (event) => {
         event.preventDefault();
