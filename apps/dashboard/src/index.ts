@@ -2391,7 +2391,14 @@ const html = `<!DOCTYPE html>
       const fetchJson = async (url) => {
         const response = await fetch(url);
         if (!response.ok) {
-          throw new Error("Falha ao carregar " + url + ": " + response.status);
+          let details = "";
+          try {
+            const payload = await response.json();
+            details = payload?.error ? " - " + payload.error : "";
+          } catch (_error) {
+            details = "";
+          }
+          throw new Error("Falha ao carregar " + url + ": " + response.status + details);
         }
         return response.json();
       };
@@ -2727,11 +2734,28 @@ const proxyRequest = async (
 
   const safeBody = body ? Uint8Array.from(body) : undefined;
 
-  return fetch(targetUrl, {
-    method,
-    headers,
-    body: safeBody ? new Blob([safeBody], { type: "application/json" }) : undefined,
-  });
+  try {
+    return await fetch(targetUrl, {
+      method,
+      headers,
+      body: safeBody ? new Blob([safeBody], { type: "application/json" }) : undefined,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Local API unavailable";
+
+    return new Response(
+      JSON.stringify({
+        error: `Local API unavailable: ${message}`,
+      }),
+      {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }
 };
 
 const server = createServer(async (request, response) => {
