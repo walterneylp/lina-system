@@ -988,6 +988,32 @@ const html = `<!DOCTYPE html>
         font-size: 0.8rem;
       }
 
+      .execution-grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .execution-row {
+        display: grid;
+        grid-template-columns: 120px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+      }
+
+      .execution-label {
+        color: var(--muted);
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .execution-value {
+        color: var(--text);
+        font-size: 0.84rem;
+        word-break: break-word;
+      }
+
       .provider-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1666,6 +1692,115 @@ const html = `<!DOCTYPE html>
         return "runtime";
       };
 
+      const parseDelegationSummary = (summary) => {
+        const raw = summary ? String(summary).trim() : "";
+        if (!raw) {
+          return {
+            mode: null,
+            agent: null,
+            subAgent: null,
+            skill: null,
+            validation: null,
+            artifact: null,
+            raw: null,
+          };
+        }
+
+        const fields = {};
+        raw
+          .split(" | ")
+          .map((part) => part.trim())
+          .filter(Boolean)
+          .forEach((part) => {
+            const separatorIndex = part.indexOf("=");
+            if (separatorIndex === -1) {
+              return;
+            }
+
+            const key = part.slice(0, separatorIndex).trim();
+            const value = part.slice(separatorIndex + 1).trim();
+            if (key) {
+              fields[key] = value;
+            }
+          });
+
+        const artifactValue = fields.artifact || "";
+        let artifact = null;
+        if (artifactValue) {
+          const firstSeparator = artifactValue.indexOf(":");
+          const secondSeparator = artifactValue.indexOf(":", firstSeparator + 1);
+          if (firstSeparator !== -1 && secondSeparator !== -1) {
+            artifact = {
+              kind: artifactValue.slice(0, firstSeparator),
+              name: artifactValue.slice(firstSeparator + 1, secondSeparator),
+              path: artifactValue.slice(secondSeparator + 1),
+            };
+          }
+        }
+
+        const normalizeNone = (value) =>
+          !value || value === "none" || value === "n/a" ? null : value;
+
+        return {
+          mode: normalizeNone(fields.mode),
+          agent: normalizeNone(fields.agent),
+          subAgent: normalizeNone(fields.subAgent),
+          skill: normalizeNone(fields.skill),
+          validation: normalizeNone(fields.validation),
+          artifact,
+          raw,
+        };
+      };
+
+      const buildExecutionRows = (execution) => {
+        const delegation = parseDelegationSummary(execution.delegationSummary);
+        const rows = [];
+        const selectedAgent = execution.selectedAgent || delegation.agent;
+        const selectedSubAgent = execution.selectedSubAgent || delegation.subAgent;
+        const selectedSkill = execution.selectedSkill || delegation.skill;
+
+        rows.push({
+          label: "Roteamento",
+          value: [
+            "agent: " + safeText(selectedAgent),
+            "sub-agent: " + safeText(selectedSubAgent),
+            "skill: " + safeText(selectedSkill),
+          ].join(" · "),
+        });
+
+        rows.push({
+          label: "Modo",
+          value: safeText(delegation.mode),
+        });
+
+        if (delegation.artifact) {
+          rows.push({
+            label: "Artifact",
+            value: [
+              "tipo: " + safeText(delegation.artifact.kind),
+              "nome: " + safeText(delegation.artifact.name),
+              "path: " + safeText(delegation.artifact.path),
+            ].join(" · "),
+          });
+        }
+
+        if (delegation.validation) {
+          rows.push({
+            label: "Validação",
+            value: delegation.validation,
+          });
+        }
+
+        if (delegation.raw) {
+          rows.push({
+            label: "Resumo",
+            value: delegation.raw,
+          });
+        }
+
+        return rows;
+      };
+
       const getTelegramFilters = () => ({
         query: document.getElementById("telegram-filter-query").value.trim().toLowerCase(),
         type: document.getElementById("telegram-filter-type").value.trim(),
@@ -2079,12 +2214,19 @@ const html = `<!DOCTYPE html>
           <article class="feed-item">
             <div class="feed-meta">
               <span class="badge \${badgeClass(execution.status === "completed" ? "ok" : execution.status === "failed" ? "degraded" : "configured")}">\${escapeHtml(execution.status)}</span>
+              <span class="badge neutral">\${escapeHtml(execution.provider)}</span>
               <span>\${formatTime(execution.createdAt)}</span>
             </div>
-            <div class="feed-title">Provider: \${escapeHtml(execution.provider)}</div>
+            <div class="feed-title">Execução \${escapeHtml(execution.id)}</div>
             <div class="feed-body">\${escapeHtml(execution.resultSummary)}</div>
-            <div class="feed-submeta">agent: \${escapeHtml(execution.selectedAgent)} · sub-agent: \${escapeHtml(execution.selectedSubAgent)} · skill: \${escapeHtml(execution.selectedSkill)}</div>
-            <div class="feed-submeta">delegação: \${escapeHtml(execution.delegationSummary)}</div>
+            <div class="execution-grid">
+              \${buildExecutionRows(execution).map((row) => \`
+                <div class="execution-row">
+                  <div class="execution-label">\${escapeHtml(row.label)}</div>
+                  <div class="execution-value">\${escapeHtml(row.value)}</div>
+                </div>
+              \`).join("")}
+            </div>
           </article>
         \`).join("");
       };
