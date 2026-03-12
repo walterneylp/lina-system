@@ -432,40 +432,38 @@ const html = `<!DOCTYPE html>
       }
 
       .shell {
-        width: min(1500px, calc(100% - 24px));
-        margin: 12px auto;
-        min-height: calc(100vh - 24px);
+        width: min(1580px, calc(100% - 20px));
+        margin: 10px auto;
+        min-height: calc(100vh - 20px);
         display: grid;
-        grid-template-columns: 280px minmax(0, 1fr);
-        gap: 18px;
+        grid-template-columns: 228px minmax(0, 1fr);
+        gap: 14px;
       }
 
       .sidebar {
         position: sticky;
-        top: 12px;
+        top: 10px;
         align-self: start;
-        min-height: calc(100vh - 24px);
-        padding: 22px 18px;
+        min-height: calc(100vh - 20px);
+        padding: 18px 14px;
         display: grid;
         grid-template-rows: auto auto 1fr auto;
-        gap: 18px;
+        gap: 14px;
       }
 
       .sidebar-brand h1 {
-        margin: 14px 0 8px;
+        margin: 10px 0 0;
         max-width: none;
-        font-size: clamp(2rem, 2.6vw, 3rem);
+        font-size: clamp(1.5rem, 1.8vw, 2rem);
       }
 
       .sidebar-copy {
-        color: var(--muted);
-        font-size: 0.94rem;
-        line-height: 1.6;
+        display: none;
       }
 
       .sidebar-nav {
         display: grid;
-        gap: 10px;
+        gap: 2px;
       }
 
       .sidebar-footer {
@@ -479,14 +477,14 @@ const html = `<!DOCTYPE html>
 
       .topbar {
         position: sticky;
-        top: 12px;
+        top: 10px;
         z-index: 10;
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        gap: 16px;
+        gap: 12px;
         align-items: center;
-        margin-bottom: 18px;
-        padding: 16px 18px;
+        margin-bottom: 14px;
+        padding: 12px 16px;
       }
 
       .topbar-left,
@@ -499,18 +497,17 @@ const html = `<!DOCTYPE html>
 
       .topbar-title {
         display: grid;
-        gap: 4px;
+        gap: 0;
       }
 
       .topbar-title strong {
         font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
-        letter-spacing: -0.03em;
-        font-size: 1.05rem;
+        letter-spacing: -0.04em;
+        font-size: 1.18rem;
       }
 
       .topbar-title span {
-        color: var(--muted);
-        font-size: 0.84rem;
+        display: none;
       }
 
       .workspace {
@@ -676,11 +673,11 @@ const html = `<!DOCTYPE html>
       .toolbar button {
         appearance: none;
         border: 0;
-        border-radius: 999px;
-        background: linear-gradient(135deg, var(--accent), #ff8b5d);
-        color: #111;
-        font-weight: 800;
-        padding: 12px 18px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.05);
+        color: var(--text);
+        font-weight: 700;
+        padding: 10px 14px;
         cursor: pointer;
       }
 
@@ -692,43 +689,44 @@ const html = `<!DOCTYPE html>
       .view-tab {
         appearance: none;
         width: 100%;
-        min-height: 54px;
-        padding: 0 16px;
-        border-radius: 18px;
-        border: 1px solid rgba(255,255,255,0.08);
-        background: rgba(255,255,255,0.04);
+        min-height: 46px;
+        padding: 0 10px 0 12px;
+        border-radius: 0;
+        border: 0;
+        border-left: 2px solid transparent;
+        background: transparent;
         color: var(--muted);
         cursor: pointer;
-        font-weight: 700;
+        font-weight: 600;
         display: grid;
-        grid-template-columns: 40px minmax(0, 1fr);
-        gap: 12px;
+        grid-template-columns: 26px minmax(0, 1fr);
+        gap: 10px;
         align-items: center;
         text-align: left;
       }
 
       .view-tab.active {
-        background: linear-gradient(135deg, var(--accent), #ff8b5d);
-        color: #111;
-        border-color: transparent;
+        background: rgba(255,255,255,0.02);
+        color: var(--text);
+        border-left-color: var(--accent);
       }
 
       .nav-icon {
-        width: 40px;
-        height: 40px;
+        width: 22px;
+        height: 22px;
         display: inline-grid;
         place-items: center;
-        border-radius: 14px;
-        background: rgba(255,255,255,0.08);
+        border-radius: 0;
+        background: transparent;
       }
 
       .view-tab.active .nav-icon {
-        background: rgba(17, 17, 17, 0.12);
+        background: transparent;
       }
 
       .nav-icon svg {
-        width: 18px;
-        height: 18px;
+        width: 16px;
+        height: 16px;
         stroke: currentColor;
         fill: none;
         stroke-width: 1.8;
@@ -738,17 +736,16 @@ const html = `<!DOCTYPE html>
 
       .nav-copy {
         display: grid;
-        gap: 2px;
+        gap: 0;
       }
 
       .nav-copy strong {
-        font-size: 0.96rem;
+        font-size: 0.92rem;
+        font-weight: 600;
       }
 
       .nav-copy span {
-        font-size: 0.78rem;
-        color: inherit;
-        opacity: 0.72;
+        display: none;
       }
 
       [data-view-panel] {
@@ -873,10 +870,7 @@ const html = `<!DOCTYPE html>
       }
 
       .settings-hero p {
-        margin: 0;
-        color: var(--muted);
-        line-height: 1.6;
-        font-size: 0.9rem;
+        display: none;
       }
 
       .settings-metrics {
@@ -919,10 +913,7 @@ const html = `<!DOCTYPE html>
       }
 
       .settings-card p {
-        margin: 0 0 14px;
-        color: var(--muted);
-        font-size: 0.88rem;
-        line-height: 1.6;
+        display: none;
       }
 
       .settings-form {
@@ -1009,12 +1000,13 @@ const html = `<!DOCTYPE html>
       }
 
       .section-head {
-        margin-bottom: 18px;
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
       }
 
       .section-head p {
-        margin: 0;
-        color: var(--muted);
+        display: none;
       }
 
       .feed {
@@ -1332,7 +1324,6 @@ const html = `<!DOCTYPE html>
         <div class="sidebar-brand">
           <div class="eyebrow"><span class="pulse"></span> LiNa Control Room</div>
           <h1>LiNa Ops</h1>
-          <p class="sidebar-copy">Painel operacional com navegação persistente, sessão protegida e controle central da execução da LiNa.</p>
         </div>
         <nav class="sidebar-nav" id="view-nav">
           <button class="view-tab active" data-view="overview" type="button">
@@ -1385,8 +1376,8 @@ const html = `<!DOCTYPE html>
         <header class="panel topbar">
           <div class="topbar-left">
             <div class="topbar-title">
-              <strong>Centro Operacional</strong>
-              <span>Conteúdo principal do módulo selecionado no menu lateral</span>
+              <strong id="topbar-section-title">Visão Geral</strong>
+              <span id="topbar-section-subtitle">Dashboard operacional</span>
             </div>
           </div>
           <div class="topbar-right">
@@ -1402,15 +1393,11 @@ const html = `<!DOCTYPE html>
         <section class="workspace" id="workspace">
           <section class="page-stack">
         <article class="page-panel" data-view-panel="overview">
-          <section class="hero">
-            <article class="panel hero-main">
-              <div class="eyebrow"><span class="pulse"></span> Visão Geral</div>
-              <h1>Leitura rápida da operação ativa da LiNa.</h1>
-              <p class="hero-copy">
-                A entrada padrão do painel concentra sinais de saúde, volume operacional,
-                providers ativos, tráfego do Telegram, tarefas e atividade recente.
-              </p>
-              <div class="hero-grid">
+          <section class="panel section">
+            <div class="section-head">
+              <h2>Visão Geral</h2>
+            </div>
+            <div class="hero-grid">
                 <div class="metric">
                   <div class="metric-label">Status Geral</div>
                   <div class="metric-value" id="metric-health">...</div>
@@ -1452,11 +1439,11 @@ const html = `<!DOCTYPE html>
                   <div class="metric-note" id="metric-last-source">Sem origem recente</div>
                 </div>
               </div>
-            </article>
-            <aside class="panel hero-side">
+          </section>
+          <section class="hero" style="margin-top:14px;">
+            <aside class="panel hero-side" style="grid-column: 1 / -1;">
               <div class="section-head">
                 <h2>Runtime</h2>
-                <p>Estado do backend, persistência e Telegram em tempo real.</p>
               </div>
               <div class="status-stack" id="status-stack"></div>
             </aside>
@@ -1918,6 +1905,19 @@ const html = `<!DOCTYPE html>
         artifactEditorLoadedPath: "",
         artifactEditorOriginalContent: "",
         artifactEditorDraftContent: "",
+      };
+
+      const viewTitles = {
+        overview: "Visão Geral",
+        infra: "Infra",
+        composer: "Composer",
+        tasks: "Tarefas",
+        messages: "Mensagens",
+        telegram: "Telegram",
+        executions: "Execuções",
+        logs: "Logs",
+        artifacts: "Artifacts",
+        settings: "Configurações",
       };
 
       const badgeClass = (value) => {
@@ -3065,6 +3065,7 @@ const html = `<!DOCTYPE html>
         const activeView = dashboardState.activeView || "overview";
         const tabs = document.querySelectorAll(".view-tab");
         const panels = document.querySelectorAll("[data-view-panel]");
+        const titleNode = document.getElementById("topbar-section-title");
 
         tabs.forEach((tab) => {
           tab.classList.toggle("active", tab.dataset.view === activeView);
@@ -3072,6 +3073,9 @@ const html = `<!DOCTYPE html>
         panels.forEach((panel) => {
           panel.classList.toggle("active", panel.dataset.viewPanel === activeView);
         });
+        if (titleNode) {
+          titleNode.textContent = viewTitles[activeView] || "Painel";
+        }
       };
 
       const fetchJson = async (url) => {
