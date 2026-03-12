@@ -16,6 +16,8 @@ export type OrchestratorResponse = {
       details: string;
     }>;
   } | null;
+  validationAgentName?: string | null;
+  validationSummary?: string | null;
   skillName?: string | null;
   agentName?: string | null;
   subAgentName?: string | null;

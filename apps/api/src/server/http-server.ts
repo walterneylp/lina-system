@@ -255,11 +255,23 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
             runtimeContext,
           });
           let taskId = payload.taskId || null;
+          const delegatedTaskTitle = result.createdArtifact
+            ? `Create ${result.createdArtifact.kind} ${result.createdArtifact.name}`
+            : payload.text;
+          const artifactSummary = result.createdArtifact
+            ? `artifact=${result.createdArtifact.kind}:${result.createdArtifact.name}:${result.createdArtifact.manifestPath}`
+            : null;
+          const validationSummary = result.validationSummary
+            ? `validation=${result.validationSummary}`
+            : null;
 
           if (!taskId && result.delegationMode && result.delegationMode !== "none") {
             const delegatedTask = await dependencies.memoryManager.createTask({
-              title: payload.text,
-              status: "delegated",
+              title: delegatedTaskTitle,
+              status:
+                result.createdArtifact && result.artifactValidation?.valid
+                  ? "completed"
+                  : "delegated",
               assignedAgent: result.agentName || result.subAgentName || null,
               targetAgent: result.agentName || null,
               targetSubAgent: result.subAgentName || null,
@@ -270,16 +282,40 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
             taskId = delegatedTask.id || null;
           }
 
+          if (taskId && result.createdArtifact) {
+            await dependencies.memoryManager.updateTask(taskId, {
+              title: delegatedTaskTitle,
+              status: result.artifactValidation?.valid ? "completed" : "failed",
+              assignedAgent: result.agentName || result.subAgentName || null,
+              targetAgent: result.agentName || null,
+              targetSubAgent: result.subAgentName || null,
+              targetSkill: result.skillName || null,
+              delegationMode: result.delegationMode || null,
+              delegatedBy: payload.delegatedBy || "orchestrator",
+            });
+          }
+
           await dependencies.memoryManager.append("assistant", result.answer);
+          if (result.createdArtifact) {
+            await dependencies.memoryManager.log(
+              result.artifactValidation?.valid ? "info" : "warn",
+              `[delegation-factory] ${result.createdArtifact.kind} ${result.createdArtifact.name} -> ${result.createdArtifact.manifestPath} (${result.artifactValidation?.valid ? "valid" : "invalid"})`
+            );
+            await dependencies.memoryManager.log(
+              result.artifactValidation?.valid ? "info" : "warn",
+              `[delegation-validation] ${result.validationAgentName || "validator"} -> ${result.validationSummary || "sem resumo"}`
+            );
+          }
           await dependencies.memoryManager.updateExecution(execution.id || "", {
             taskId,
             provider: result.provider,
             status: "completed",
-            resultSummary: result.answer.slice(0, 500),
+            resultSummary: [result.answer, result.validationSummary].filter(Boolean).join("\n").slice(0, 500),
             selectedAgent: result.agentName || null,
             selectedSubAgent: result.subAgentName || null,
             selectedSkill: result.skillName || null,
-            delegationSummary: result.delegationSummary || null,
+            delegationSummary:
+              [result.delegationSummary, artifactSummary, validationSummary].filter(Boolean).join(" | ") || null,
           });
 
           response.writeHead(200, { "Content-Type": "application/json" });

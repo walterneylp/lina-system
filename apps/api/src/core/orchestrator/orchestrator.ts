@@ -87,6 +87,8 @@ export class LinaOrchestrator {
           valid: execution.validation.valid,
           checks: execution.validation.checks,
         },
+        validationAgentName: execution.validationAgentName,
+        validationSummary: execution.validationSummary,
         skillName: selectedSkill?.name || null,
         agentName: selectedAgent?.name || null,
         subAgentName: selectedSubAgent?.name || null,

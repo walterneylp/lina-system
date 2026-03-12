@@ -1388,6 +1388,8 @@ const html = `<!DOCTYPE html>
               <select id="log-filter-category" class="control">
                 <option value="">Todas</option>
                 <option value="dashboard-audit">dashboard-audit</option>
+                <option value="delegation-factory">delegation-factory</option>
+                <option value="delegation-validation">delegation-validation</option>
                 <option value="telegram-admin">telegram-admin</option>
                 <option value="telegram-command">telegram-command</option>
                 <option value="bootstrap">bootstrap</option>
@@ -1656,6 +1658,8 @@ const html = `<!DOCTYPE html>
       const classifyLogCategory = (message) => {
         const normalized = safeText(message).toLowerCase();
         if (normalized.includes("[dashboard-audit]")) return "dashboard-audit";
+        if (normalized.includes("[delegation-factory]")) return "delegation-factory";
+        if (normalized.includes("[delegation-validation]")) return "delegation-validation";
         if (normalized.includes("[telegram-admin]")) return "telegram-admin";
         if (normalized.includes("[telegram-command]")) return "telegram-command";
         if (normalized.includes("bootstrap")) return "bootstrap";
@@ -1895,6 +1899,8 @@ const html = `<!DOCTYPE html>
             </div>
             <div class="feed-title">\${escapeHtml(task.title)}</div>
             <div class="feed-body">Agente: \${escapeHtml(task.assignedAgent)}</div>
+            <div class="feed-submeta">targetAgent: \${escapeHtml(task.targetAgent)} · targetSubAgent: \${escapeHtml(task.targetSubAgent)} · targetSkill: \${escapeHtml(task.targetSkill)}</div>
+            <div class="feed-submeta">modo: \${escapeHtml(task.delegationMode)} · por: \${escapeHtml(task.delegatedBy)}</div>
             <div class="task-actions">
               \${canManageTasks
                 ? [
@@ -2077,6 +2083,8 @@ const html = `<!DOCTYPE html>
             </div>
             <div class="feed-title">Provider: \${escapeHtml(execution.provider)}</div>
             <div class="feed-body">\${escapeHtml(execution.resultSummary)}</div>
+            <div class="feed-submeta">agent: \${escapeHtml(execution.selectedAgent)} · sub-agent: \${escapeHtml(execution.selectedSubAgent)} · skill: \${escapeHtml(execution.selectedSkill)}</div>
+            <div class="feed-submeta">delegação: \${escapeHtml(execution.delegationSummary)}</div>
           </article>
         \`).join("");
       };

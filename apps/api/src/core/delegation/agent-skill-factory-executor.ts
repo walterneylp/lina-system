@@ -14,6 +14,8 @@ type AgentSkillFactoryExecutionResult = {
   provider: string;
   artifact: CreatedDelegationArtifact;
   validation: DelegationArtifactValidationResult;
+  validationAgentName: string;
+  validationSummary: string;
 };
 
 type AgentSkillFactoryExecutorOptions = {
@@ -30,6 +32,8 @@ const toKebabCase = (value: string): string =>
     .replace(/^-+|-+$/g, "");
 
 export class AgentSkillFactoryExecutor {
+  private static readonly VALIDATION_AGENT_NAME = "manifest-structure-validator";
+
   constructor(private readonly options: AgentSkillFactoryExecutorOptions) {}
 
   public canHandle(input: {
@@ -46,17 +50,22 @@ export class AgentSkillFactoryExecutor {
     const plan = this.buildCreationPlan(text);
     const artifact = this.options.artifactFactory.create(plan);
     const validation = this.options.artifactValidator.validate(plan.kind, artifact.manifestPath);
+    const passedChecks = validation.checks.filter((check) => check.ok).length;
+    const validationSummary = `${AgentSkillFactoryExecutor.VALIDATION_AGENT_NAME}: ${passedChecks}/${validation.checks.length} checks ${validation.valid ? "ok" : "com pendências"}`;
 
     return {
       provider: "system-factory",
       artifact,
       validation,
+      validationAgentName: AgentSkillFactoryExecutor.VALIDATION_AGENT_NAME,
+      validationSummary,
       answer: [
         `Artifact ${artifact.overwritten ? "atualizado" : "criado"} pela LiNa.`,
         `- tipo: ${artifact.kind}`,
         `- nome: ${artifact.name}`,
         `- manifest: ${artifact.manifestPath}`,
         `- validação: ${validation.valid ? "ok" : "falhou"}`,
+        `- validator: ${validationSummary}`,
       ]
         .concat(
           validation.checks
