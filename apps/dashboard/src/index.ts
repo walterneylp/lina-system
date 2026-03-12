@@ -1200,24 +1200,27 @@ const html = `<!DOCTYPE html>
         min-width: 170px;
       }
 
-      .artifact-toolbar-form {
+      .artifact-create-card {
+        margin-bottom: 18px;
+      }
+
+      .artifact-create-form {
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
         align-items: end;
-        flex: 1 1 560px;
       }
 
-      .artifact-toolbar-form label {
+      .artifact-create-form label {
         min-width: 150px;
         flex: 1 1 150px;
       }
 
-      .artifact-toolbar-form .artifact-description-field {
+      .artifact-create-form .artifact-description-field {
         flex: 1.8 1 260px;
       }
 
-      .artifact-toolbar-form .artifact-overwrite-toggle {
+      .artifact-create-form .artifact-overwrite-toggle {
         display: flex;
         align-items: center;
         gap: 10px;
@@ -1313,10 +1316,8 @@ const html = `<!DOCTYPE html>
         }
 
         .artifact-toolbar > label,
-        .artifact-toolbar-form,
-        .artifact-toolbar-form label {
+        .artifact-create-form label {
           min-width: 100%;
-          flex-basis: 100%;
         }
       }
 
@@ -1698,9 +1699,12 @@ const html = `<!DOCTYPE html>
               Busca
               <input id="artifact-filter-query" class="control" type="text" placeholder="nome, descrição, acesso..." />
             </label>
-            <form class="artifact-toolbar-form" id="artifact-factory-form">
+          </div>
+          <section class="settings-card artifact-create-card">
+            <h3>Criar Artifact</h3>
+            <form class="artifact-create-form" id="artifact-factory-form">
               <label>
-                Criar tipo
+                Tipo
                 <select id="artifact-kind" class="control">
                   <option value="agent">agent</option>
                   <option value="sub-agent">sub-agent</option>
@@ -1721,8 +1725,8 @@ const html = `<!DOCTYPE html>
               </label>
               <button class="task-action" type="submit">Criar artifact</button>
             </form>
-          </div>
-          <div class="composer-result" id="artifact-factory-result">Nenhum artifact criado nesta sessão.</div>
+            <div class="composer-result" id="artifact-factory-result">Nenhum artifact criado nesta sessão.</div>
+          </section>
           <div class="artifact-layout">
             <div class="artifact-stack">
               <section class="settings-card">
