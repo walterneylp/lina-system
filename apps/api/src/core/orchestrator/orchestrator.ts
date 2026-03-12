@@ -1,6 +1,7 @@
 import { AgentLoader } from "../agents/agent-loader";
 import { AgentMetadata } from "../agents/agent.types";
 import { AgentLoop } from "../agent-loop/agent-loop";
+import { AgentSkillFactoryExecutor } from "../delegation/agent-skill-factory-executor";
 import { DelegationEngine } from "../delegation/delegation-engine";
 import { SkillLoader } from "../skills/skill-loader";
 import { LlmMessage } from "../providers/provider.types";
@@ -21,6 +22,7 @@ export class LinaOrchestrator {
     private readonly skillLoader: SkillLoader,
     private readonly agentLoader: AgentLoader,
     private readonly subAgentLoader: AgentLoader,
+    private readonly agentSkillFactoryExecutor: AgentSkillFactoryExecutor,
     private readonly appName: string,
     private readonly environment: string
   ) {}
@@ -62,6 +64,51 @@ export class LinaOrchestrator {
       null,
       2
     );
+
+    if (
+      this.agentSkillFactoryExecutor.canHandle({
+        selectedAgent: selectedAgent?.name || null,
+        selectedSkill: selectedSkill?.name || null,
+      })
+    ) {
+      const execution = this.agentSkillFactoryExecutor.execute(input.text);
+
+      return {
+        answer: execution.answer,
+        iterations: 1,
+        provider: execution.provider,
+        createdArtifact: {
+          kind: execution.artifact.kind,
+          name: execution.artifact.name,
+          manifestPath: execution.artifact.manifestPath,
+          overwritten: execution.artifact.overwritten,
+        },
+        artifactValidation: {
+          valid: execution.validation.valid,
+          checks: execution.validation.checks,
+        },
+        skillName: selectedSkill?.name || null,
+        agentName: selectedAgent?.name || null,
+        subAgentName: selectedSubAgent?.name || null,
+        delegationMode: delegation.delegationMode,
+        delegationSummary: delegation.summary,
+        availableSkills: skills.map((skill: SkillMetadata) => ({
+          name: skill.name,
+          description: skill.description,
+        })),
+        availableAgents: agents.map((agent: AgentMetadata) => ({
+          name: agent.name,
+          description: agent.description,
+          role: agent.role,
+        })),
+        availableSubAgents: subAgents.map((agent: AgentMetadata) => ({
+          name: agent.name,
+          description: agent.description,
+          role: agent.role,
+        })),
+      };
+    }
+
     const systemPrompt = buildLiNaBaseSystemPrompt({
       appName: this.appName,
       environment: this.environment,

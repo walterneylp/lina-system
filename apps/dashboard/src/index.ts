@@ -1631,7 +1631,7 @@ const html = `<!DOCTYPE html>
               (check) => (check.ok ? "ok" : "erro") + " · " + safeText(check.label) + " · " + safeText(check.details)
             )
           )
-          .join("\n");
+          .join("\\n");
       };
 
       const listEnabledPermissions = (permissions) =>

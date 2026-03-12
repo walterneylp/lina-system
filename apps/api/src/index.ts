@@ -1,6 +1,9 @@
 import { loadEnv } from "./config/env";
 import { AgentLoader } from "./core/agents/agent-loader";
 import { AgentLoop } from "./core/agent-loop/agent-loop";
+import { AgentSkillFactoryExecutor } from "./core/delegation/agent-skill-factory-executor";
+import { DelegationArtifactFactory } from "./core/delegation/artifact-factory";
+import { DelegationArtifactValidator } from "./core/delegation/artifact-validator";
 import { MemoryManager } from "./core/memory/memory-manager";
 import { createMemoryStoreWithFallback } from "./core/memory/memory-store.factory";
 import { LinaOrchestrator } from "./core/orchestrator/orchestrator";
@@ -37,11 +40,27 @@ export const bootstrapLiNa = async () => {
 
   const memoryStore = await createMemoryStoreWithFallback(env);
   const memoryManager = new MemoryManager(memoryStore);
+  const artifactFactory = new DelegationArtifactFactory({
+    agentsDirectory: env.agentsDirectory,
+    subAgentsDirectory: env.subAgentsDirectory,
+    skillsDirectory: env.skillsDirectory,
+    templatesDirectory: "./.agents/templates",
+  });
+  const artifactValidator = new DelegationArtifactValidator({
+    agentsDirectory: env.agentsDirectory,
+    subAgentsDirectory: env.subAgentsDirectory,
+    skillsDirectory: env.skillsDirectory,
+  });
+  const agentSkillFactoryExecutor = new AgentSkillFactoryExecutor({
+    artifactFactory,
+    artifactValidator,
+  });
   const orchestrator = new LinaOrchestrator(
     agentLoop,
     skillLoader,
     agentLoader,
     subAgentLoader,
+    agentSkillFactoryExecutor,
     env.appName,
     env.appEnv
   );
