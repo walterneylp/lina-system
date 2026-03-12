@@ -7,6 +7,8 @@ export type AgentMetadata = {
   role: string;
   delegationScope: string;
   allowedSkills: string[];
+  accessibleBy: string[];
+  editableBy: string[];
   path: string;
   version?: string;
   content?: string;

@@ -33,6 +33,12 @@ export class AgentLoader {
             this.kind === "agent" ? "orchestrator-only" : "agent-only"
           ),
           allowedSkills: asStringArray(metadata.allowed_skills),
+          accessibleBy: asStringArray(metadata.accessible_by).length
+            ? asStringArray(metadata.accessible_by)
+            : ["LiNa"],
+          editableBy: asStringArray(metadata.editable_by).length
+            ? asStringArray(metadata.editable_by)
+            : ["Admin"],
           path: manifestPath,
           version: asString(metadata.version, ""),
           content,

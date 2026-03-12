@@ -844,6 +844,68 @@ const html = `<!DOCTYPE html>
         margin-bottom: 18px;
       }
 
+      .settings-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .settings-stack,
+      .settings-rail,
+      .settings-block {
+        display: grid;
+        gap: 18px;
+      }
+
+      .settings-hero {
+        padding: 20px 22px;
+        border-radius: 22px;
+        background:
+          radial-gradient(circle at top left, rgba(255,181,77,0.15), transparent 34%),
+          linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+        border: 1px solid rgba(255,255,255,0.08);
+      }
+
+      .settings-hero h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+      }
+
+      .settings-hero p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+        font-size: 0.9rem;
+      }
+
+      .settings-metrics {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+      }
+
+      .settings-metric {
+        display: inline-flex;
+        align-items: center;
+        min-height: 38px;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.04);
+        color: var(--text);
+        font-size: 0.82rem;
+      }
+
+      .settings-section-title {
+        margin: 0;
+        font-size: 0.78rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
       .settings-card {
         padding: 18px;
         border-radius: 18px;
@@ -866,6 +928,13 @@ const html = `<!DOCTYPE html>
       .settings-form {
         display: grid;
         gap: 12px;
+      }
+
+      .settings-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 14px;
       }
 
       .composer-form textarea {
@@ -1014,6 +1083,69 @@ const html = `<!DOCTYPE html>
         word-break: break-word;
       }
 
+      .artifact-layout {
+        display: grid;
+        grid-template-columns: minmax(320px, 0.7fr) minmax(0, 1.3fr);
+        gap: 18px;
+      }
+
+      .artifact-stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .artifact-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .artifact-item {
+        padding: 14px 16px;
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.06);
+        background: rgba(255,255,255,0.025);
+        cursor: pointer;
+      }
+
+      .artifact-item.active {
+        border-color: rgba(255,181,77,0.42);
+        background: rgba(255,181,77,0.08);
+      }
+
+      .artifact-meta {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+
+      .artifact-chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.04);
+        color: var(--muted);
+        font-size: 0.74rem;
+      }
+
+      .artifact-editor textarea {
+        min-height: 420px;
+        resize: vertical;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.84rem;
+        line-height: 1.6;
+      }
+
+      .artifact-toolbar {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+
       .provider-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1086,6 +1218,14 @@ const html = `<!DOCTYPE html>
         }
 
         .settings-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .settings-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .artifact-layout {
           grid-template-columns: 1fr;
         }
       }
@@ -1174,6 +1314,10 @@ const html = `<!DOCTYPE html>
           <button class="view-tab" data-view="logs" type="button">
             <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 4h10l3 3v13H4V4h3Z"/><path d="M8 11h8"/><path d="M8 15h8"/></svg></span>
             <span class="nav-copy"><strong>Logs</strong><span>Eventos recentes para depuração</span></span>
+          </button>
+          <button class="view-tab" data-view="artifacts" type="button">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z"/><path d="m4 7 8 4 8-4"/><path d="M12 11v10"/></svg></span>
+            <span class="nav-copy"><strong>Artifacts</strong><span>Catálogo, acesso e edição dos manifests</span></span>
           </button>
           <button class="view-tab" data-view="settings" type="button">
             <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5A3.5 3.5 0 1 0 12 8.5Z"/><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 0 1 0 2.8l-.1.1a2 2 0 0 1-2.8 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 0 1-2.8 0l-.1-.1a2 2 0 0 1 0-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 0 1 0-2.8l.1-.1a2 2 0 0 1 2.8 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 0 1 2.8 0l.1.1a2 2 0 0 1 0 2.8l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-.2a1 1 0 0 0-.9.6Z"/></svg></span>
@@ -1451,129 +1595,211 @@ const html = `<!DOCTYPE html>
           <div class="feed" id="executions-feed"></div>
         </article>
 
+        <article class="panel section page-panel" data-view-panel="artifacts">
+          <div class="section-head">
+            <h2>Artifacts</h2>
+            <p>Gestão completa de agents, sub-agents e skills, incluindo acesso, manifesto e edição manual.</p>
+          </div>
+          <div class="artifact-toolbar">
+            <label>
+              Tipo
+              <select id="artifact-filter-kind" class="control">
+                <option value="">Todos</option>
+                <option value="agent">agent</option>
+                <option value="sub-agent">sub-agent</option>
+                <option value="skill">skill</option>
+              </select>
+            </label>
+            <label>
+              Busca
+              <input id="artifact-filter-query" class="control" type="text" placeholder="nome, descrição, acesso..." />
+            </label>
+          </div>
+          <div class="artifact-layout">
+            <div class="artifact-stack">
+              <section class="settings-card">
+                <h3>Factory de Artifacts</h3>
+                <p>Crie agents, sub-agents e skills diretamente do painel usando os templates oficiais da LiNa, com validação imediata do manifest gerado.</p>
+                <form class="settings-form" id="artifact-factory-form">
+                  <label>
+                    Tipo
+                    <select id="artifact-kind" class="control">
+                      <option value="agent">agent</option>
+                      <option value="sub-agent">sub-agent</option>
+                      <option value="skill">skill</option>
+                    </select>
+                  </label>
+                  <label>
+                    Nome
+                    <input id="artifact-name" class="control" type="text" placeholder="ex: document-analyzer-specialist" required />
+                  </label>
+                  <label>
+                    Descrição
+                    <input id="artifact-description" class="control" type="text" placeholder="Descrição objetiva do artifact" required />
+                  </label>
+                  <label style="display:flex;align-items:center;gap:10px;">
+                    <input id="artifact-overwrite" type="checkbox" />
+                    sobrescrever se já existir
+                  </label>
+                  <button class="task-action" type="submit">Criar artifact</button>
+                </form>
+                <div class="composer-result" id="artifact-factory-result">Nenhum artifact criado nesta sessão.</div>
+              </section>
+              <section class="settings-card">
+                <h3>Catálogo Atual</h3>
+                <p>Itens já criados, com acesso efetivo e caminho do manifest.</p>
+                <div class="artifact-list" id="artifacts-feed"></div>
+              </section>
+            </div>
+            <section class="settings-card artifact-editor">
+              <h3>Manifest Editor</h3>
+              <p>Abra, revise e modifique manualmente o arquivo que define o artifact selecionado.</p>
+              <div class="composer-result" id="artifact-editor-summary">Selecione um artifact para começar.</div>
+              <form class="settings-form" id="artifact-editor-form">
+                <label>
+                  Caminho do arquivo
+                  <input id="artifact-editor-path" class="control" type="text" readonly />
+                </label>
+                <label>
+                  Conteúdo do manifest
+                  <textarea id="artifact-editor-content" class="control" placeholder="O conteúdo do manifest aparecerá aqui."></textarea>
+                </label>
+                <button class="task-action" id="artifact-editor-save" type="submit">Salvar manifest</button>
+              </form>
+              <div class="composer-result" id="artifact-editor-result">Nenhuma alteração salva nesta sessão.</div>
+            </section>
+          </div>
+        </article>
+
         <article class="panel section page-panel" data-view-panel="settings">
           <div class="section-head">
             <h2>Configurações</h2>
-            <p>Controle de autenticação do dashboard, usuários, IDs do Telegram e troca de senha.</p>
+            <p>Autenticação, acesso operacional e governança do painel.</p>
           </div>
-          <div class="settings-grid">
-            <section class="settings-card">
-              <h3>Criar usuário</h3>
-              <p>Cadastre novos acessos do dashboard e já associe IDs do Telegram permitidos para esse usuário.</p>
-              <form class="settings-form" id="create-user-form">
-                <label>
-                  Usuário
-                  <input id="create-user-username" class="control" type="text" placeholder="ex: operador.lina" required />
-                </label>
-                <label>
-                  Papel
-                  <select id="create-user-role" class="control">
-                    <option value="viewer">viewer</option>
-                    <option value="operator">operator</option>
-                    <option value="admin">admin</option>
-                  </select>
-                </label>
-                <label>
-                  Senha inicial
-                  <input id="create-user-password" class="control" type="password" placeholder="mínimo 8 caracteres" required />
-                </label>
-                <label>
-                  IDs do Telegram
-                  <input id="create-user-telegram-ids" class="control" type="text" placeholder="165169460, 123456789" />
-                </label>
-                <button class="task-action" type="submit">Criar usuário</button>
-              </form>
-            </section>
+          <div class="settings-layout">
+            <div class="settings-stack">
+              <section class="settings-hero">
+                <h3>Centro de Controle</h3>
+                <p>Esta área concentra identidade, governança e automações sensíveis do dashboard. Cada trilha abaixo agrupa apenas um tipo de ação para evitar mistura entre credenciais, usuários e factory.</p>
+                <div class="settings-metrics" id="settings-metrics">
+                  <div class="settings-metric">Sessão em carregamento</div>
+                </div>
+              </section>
 
-            <section class="settings-card">
-              <h3>Gerenciar usuário</h3>
-              <p>Edite IDs do Telegram, ative ou desative usuários existentes e, se necessário, defina uma nova senha.</p>
-              <form class="settings-form" id="manage-user-form">
-                <label>
-                  Usuário
-                  <select id="manage-user-select" class="control"></select>
-                </label>
-                <label>
-                  Papel
-                  <select id="manage-user-role" class="control">
-                    <option value="viewer">viewer</option>
-                    <option value="operator">operator</option>
-                    <option value="admin">admin</option>
-                  </select>
-                </label>
-                <label>
-                  IDs do Telegram
-                  <input id="manage-user-telegram-ids" class="control" type="text" placeholder="165169460, 123456789" />
-                </label>
-                <label>
-                  Situação
-                  <select id="manage-user-active" class="control">
-                    <option value="true">ativo</option>
-                    <option value="false">inativo</option>
-                  </select>
-                </label>
-                <label>
-                  Nova senha opcional
-                  <input id="manage-user-password" class="control" type="password" placeholder="preencha só se quiser trocar" />
-                </label>
-                <button class="task-action" type="submit">Salvar usuário</button>
-              </form>
-            </section>
+              <section class="settings-block">
+                <div class="settings-section-title">Acesso e Identidade</div>
+                <div class="settings-grid">
+                  <section class="settings-card">
+                    <h3>Criar usuário</h3>
+                    <p>Cadastre novos acessos do dashboard e associe IDs do Telegram permitidos para esse usuário.</p>
+                    <form class="settings-form" id="create-user-form">
+                      <label>
+                        Usuário
+                        <input id="create-user-username" class="control" type="text" placeholder="ex: operador.lina" required />
+                      </label>
+                      <label>
+                        Papel
+                        <select id="create-user-role" class="control">
+                          <option value="viewer">viewer</option>
+                          <option value="operator">operator</option>
+                          <option value="admin">admin</option>
+                        </select>
+                      </label>
+                      <label>
+                        Senha inicial
+                        <input id="create-user-password" class="control" type="password" placeholder="mínimo 8 caracteres" required />
+                      </label>
+                      <label>
+                        IDs do Telegram
+                        <input id="create-user-telegram-ids" class="control" type="text" placeholder="165169460, 123456789" />
+                      </label>
+                      <button class="task-action" type="submit">Criar usuário</button>
+                    </form>
+                  </section>
 
-            <section class="settings-card">
-              <h3>Factory de Artifacts</h3>
-              <p>Crie agents, sub-agents e skills diretamente do painel usando os templates oficiais da LiNa, com validação imediata do manifest gerado.</p>
-              <form class="settings-form" id="artifact-factory-form">
-                <label>
-                  Tipo
-                  <select id="artifact-kind" class="control">
-                    <option value="agent">agent</option>
-                    <option value="sub-agent">sub-agent</option>
-                    <option value="skill">skill</option>
-                  </select>
-                </label>
-                <label>
-                  Nome
-                  <input id="artifact-name" class="control" type="text" placeholder="ex: document-analyzer-specialist" required />
-                </label>
-                <label>
-                  Descrição
-                  <input id="artifact-description" class="control" type="text" placeholder="Descrição objetiva do artifact" required />
-                </label>
-                <label style="display:flex;align-items:center;gap:10px;">
-                  <input id="artifact-overwrite" type="checkbox" />
-                  sobrescrever se já existir
-                </label>
-                <button class="task-action" type="submit">Criar artifact</button>
-              </form>
-              <div class="composer-result" id="artifact-factory-result">Nenhum artifact criado nesta sessão.</div>
-            </section>
+                  <section class="settings-card">
+                    <h3>Gerenciar usuário</h3>
+                    <p>Edite papel, IDs do Telegram, situação e senha operacional do usuário selecionado.</p>
+                    <form class="settings-form" id="manage-user-form">
+                      <label>
+                        Usuário
+                        <select id="manage-user-select" class="control"></select>
+                      </label>
+                      <label>
+                        Papel
+                        <select id="manage-user-role" class="control">
+                          <option value="viewer">viewer</option>
+                          <option value="operator">operator</option>
+                          <option value="admin">admin</option>
+                        </select>
+                      </label>
+                      <label>
+                        IDs do Telegram
+                        <input id="manage-user-telegram-ids" class="control" type="text" placeholder="165169460, 123456789" />
+                      </label>
+                      <label>
+                        Situação
+                        <select id="manage-user-active" class="control">
+                          <option value="true">ativo</option>
+                          <option value="false">inativo</option>
+                        </select>
+                      </label>
+                      <label>
+                        Nova senha opcional
+                        <input id="manage-user-password" class="control" type="password" placeholder="preencha só se quiser trocar" />
+                      </label>
+                      <button class="task-action" type="submit">Salvar usuário</button>
+                    </form>
+                  </section>
+                </div>
+              </section>
+
+              <section class="settings-block">
+                <div class="settings-section-title">Segurança da Sessão</div>
+                <section class="settings-card">
+                  <h3>Trocar minha senha</h3>
+                  <p>Esse fluxo é pessoal e separado do gerenciamento administrativo. Use sua senha atual para confirmar a alteração.</p>
+                  <form class="settings-form" id="self-password-form">
+                    <label>
+                      Senha atual
+                      <input id="self-current-password" class="control" type="password" required />
+                    </label>
+                    <label>
+                      Nova senha
+                      <input id="self-new-password" class="control" type="password" required />
+                    </label>
+                    <label>
+                      Confirmar nova senha
+                      <input id="self-confirm-password" class="control" type="password" required />
+                    </label>
+                    <button class="task-action" type="submit">Trocar senha</button>
+                  </form>
+                </section>
+              </section>
+            </div>
+
+            <aside class="settings-rail">
+              <section class="settings-block">
+                <div class="settings-section-title">Governança</div>
+                <section class="settings-card">
+                  <h3>Bootstrap Admin</h3>
+                  <p>Ative ou desative a janela de criação do primeiro admin. Esse controle afeta somente o bootstrap do dashboard.</p>
+                  <div class="settings-actions">
+                    <button class="task-action" id="bootstrap-toggle-button" type="button">Alternar bootstrap</button>
+                  </div>
+                </section>
+              </section>
+
+              <section class="settings-block">
+                <div class="settings-section-title">Diretório Operacional</div>
+                <section class="settings-card">
+                  <h3>Usuários e Permissões</h3>
+                  <p>Lista operacional dos usuários do dashboard, com papéis, IDs do Telegram e permissões efetivas.</p>
+                  <div class="feed" id="settings-feed"></div>
+                </section>
+              </section>
+            </aside>
           </div>
-
-          <section class="settings-card" style="margin-bottom:18px;">
-            <h3>Trocar minha senha</h3>
-            <p>Você pode trocar sua senha tanto aqui quanto na tela de login. Esta ação usa a senha atual para confirmação.</p>
-            <form class="settings-form" id="self-password-form">
-              <label>
-                Senha atual
-                <input id="self-current-password" class="control" type="password" required />
-              </label>
-              <label>
-                Nova senha
-                <input id="self-new-password" class="control" type="password" required />
-              </label>
-              <label>
-                Confirmar nova senha
-                <input id="self-confirm-password" class="control" type="password" required />
-              </label>
-              <button class="task-action" type="submit">Trocar senha</button>
-            </form>
-          </section>
-
-          <div class="task-actions">
-            <button class="task-action" id="bootstrap-toggle-button" type="button">Alternar bootstrap</button>
-          </div>
-          <div class="feed" id="settings-feed"></div>
         </article>
           </section>
         </section>
@@ -1589,7 +1815,9 @@ const html = `<!DOCTYPE html>
         tasks: "/api/tasks",
         executions: "/api/executions?limit=30",
         logs: "/api/logs?limit=30",
+        delegationCatalog: "/api/delegation/catalog",
         delegationFactory: "/api/delegation/factory",
+        delegationArtifactContent: "/api/delegation/artifact-content",
         authState: "/dashboard/auth/state",
         authBootstrapToggle: "/dashboard/auth/bootstrap-toggle",
         authUsers: "/dashboard/auth/users",
@@ -1604,9 +1832,11 @@ const html = `<!DOCTYPE html>
         tasks: [],
         executions: [],
         logs: [],
+        artifactCatalog: { agents: [], subAgents: [], skills: [] },
         auth: null,
         activeView: "overview",
         theme: localStorage.getItem("lina-dashboard-theme") || "dark",
+        activeArtifactPath: "",
       };
 
       const badgeClass = (value) => {
@@ -1752,6 +1982,30 @@ const html = `<!DOCTYPE html>
         };
       };
 
+      const flattenArtifactCatalog = (catalog) => [
+        ...((catalog?.agents || []).map((item) => ({ ...item, kind: "agent" }))),
+        ...((catalog?.subAgents || []).map((item) => ({ ...item, kind: "sub-agent" }))),
+        ...((catalog?.skills || []).map((item) => ({ ...item, kind: "skill" }))),
+      ];
+
+      const getArtifactFilters = () => ({
+        kind: document.getElementById("artifact-filter-kind").value.trim(),
+        query: document.getElementById("artifact-filter-query").value.trim().toLowerCase(),
+      });
+
+      const getArtifactAccessText = (artifact) => {
+        const access = Array.isArray(artifact?.accessibleBy) && artifact.accessibleBy.length
+          ? artifact.accessibleBy.join(", ")
+          : "LiNa";
+        const editable = Array.isArray(artifact?.editableBy) && artifact.editableBy.length
+          ? artifact.editableBy.join(", ")
+          : "Admin";
+        return {
+          access,
+          editable,
+        };
+      };
+
       const buildExecutionRows = (execution) => {
         const delegation = parseDelegationSummary(execution.delegationSummary);
         const rows = [];
@@ -1801,6 +2055,76 @@ const html = `<!DOCTYPE html>
         return rows;
       };
 
+      const renderArtifacts = (catalog) => {
+        const feed = document.getElementById("artifacts-feed");
+        const summary = document.getElementById("artifact-editor-summary");
+        const editorPath = document.getElementById("artifact-editor-path");
+        const editorContent = document.getElementById("artifact-editor-content");
+        const artifacts = flattenArtifactCatalog(catalog);
+        const filters = getArtifactFilters();
+
+        const filteredArtifacts = artifacts
+          .filter((artifact) => {
+            const access = getArtifactAccessText(artifact);
+            const kindMatch = !filters.kind || artifact.kind === filters.kind;
+            const queryMatch =
+              !filters.query ||
+              safeText(artifact.name).toLowerCase().includes(filters.query) ||
+              safeText(artifact.description).toLowerCase().includes(filters.query) ||
+              safeText(access.access).toLowerCase().includes(filters.query) ||
+              safeText(access.editable).toLowerCase().includes(filters.query) ||
+              safeText(artifact.path).toLowerCase().includes(filters.query);
+            return kindMatch && queryMatch;
+          })
+          .sort((left, right) => String(left.name).localeCompare(String(right.name)));
+
+        if (!filteredArtifacts.length) {
+          renderEmpty(feed, "Nenhum artifact corresponde aos filtros atuais.");
+          summary.textContent = "Selecione um artifact para começar.";
+          editorPath.value = "";
+          editorContent.value = "";
+          return;
+        }
+
+        if (!dashboardState.activeArtifactPath || !filteredArtifacts.some((artifact) => artifact.path === dashboardState.activeArtifactPath)) {
+          dashboardState.activeArtifactPath = filteredArtifacts[0].path;
+        }
+
+        const selectedArtifact =
+          filteredArtifacts.find((artifact) => artifact.path === dashboardState.activeArtifactPath) ||
+          filteredArtifacts[0];
+        const selectedAccess = getArtifactAccessText(selectedArtifact);
+
+        feed.innerHTML = filteredArtifacts.map((artifact) => {
+          const access = getArtifactAccessText(artifact);
+          const isActive = artifact.path === dashboardState.activeArtifactPath;
+          return \`
+            <article class="artifact-item \${isActive ? "active" : ""}" data-artifact-path="\${escapeHtml(artifact.path)}">
+              <div class="feed-meta">
+                <span class="badge neutral">\${escapeHtml(artifact.kind)}</span>
+                <span>\${escapeHtml(artifact.version || "sem versão")}</span>
+              </div>
+              <div class="feed-title">\${escapeHtml(artifact.name)}</div>
+              <div class="feed-body">\${escapeHtml(artifact.description)}</div>
+              <div class="artifact-meta">
+                <span class="artifact-chip">acesso: \${escapeHtml(access.access)}</span>
+                <span class="artifact-chip">edição: \${escapeHtml(access.editable)}</span>
+              </div>
+            </article>
+          \`;
+        }).join("");
+
+        summary.innerHTML = [
+          '<strong>' + escapeHtml(selectedArtifact.name) + '</strong>',
+          'tipo: ' + escapeHtml(selectedArtifact.kind),
+          'acesso: ' + escapeHtml(selectedAccess.access),
+          'edição: ' + escapeHtml(selectedAccess.editable),
+          'arquivo: ' + escapeHtml(selectedArtifact.path),
+        ].join('<br />');
+        editorPath.value = selectedArtifact.path || "";
+        editorContent.value = selectedArtifact.content || "";
+      };
+
       const getTelegramFilters = () => ({
         query: document.getElementById("telegram-filter-query").value.trim().toLowerCase(),
         type: document.getElementById("telegram-filter-type").value.trim(),
@@ -1846,6 +2170,7 @@ const html = `<!DOCTYPE html>
         setElementVisibility("#create-user-form", canManageUsers);
         setElementVisibility("#manage-user-form", canManageUsers);
         setElementVisibility("#artifact-factory-form", canManageArtifacts);
+        setElementVisibility("#artifact-editor-form", canManageArtifacts);
         setElementVisibility("#bootstrap-toggle-button", canManageBootstrap);
 
         setElementDisabled("#task-title", !canManageTasks);
@@ -1860,7 +2185,9 @@ const html = `<!DOCTYPE html>
         setElementDisabled("#artifact-name", !canManageArtifacts);
         setElementDisabled("#artifact-description", !canManageArtifacts);
         setElementDisabled("#artifact-overwrite", !canManageArtifacts);
+        setElementDisabled("#artifact-editor-content", !canManageArtifacts);
         setElementDisabled('#artifact-factory-form button[type="submit"]', !canManageArtifacts);
+        setElementDisabled('#artifact-editor-form button[type="submit"]', !canManageArtifacts);
 
         if (dashboardState.activeView === "composer" && !canRunComposer) {
           dashboardState.activeView = "overview";
@@ -2233,6 +2560,7 @@ const html = `<!DOCTYPE html>
 
       const renderSettings = (authPayload) => {
         const feed = document.getElementById("settings-feed");
+        const metrics = document.getElementById("settings-metrics");
         const pill = document.getElementById("current-user-pill");
         const toggleButton = document.getElementById("bootstrap-toggle-button");
         const manageUserSelect = document.getElementById("manage-user-select");
@@ -2241,6 +2569,7 @@ const html = `<!DOCTYPE html>
 
         if (!authPayload) {
           pill.textContent = "Sessão sem contexto";
+          metrics.innerHTML = '<div class="settings-metric">Sem estado de autenticação</div>';
           toggleButton.disabled = true;
           manageUserSelect.innerHTML = '<option value="">Sem usuários</option>';
           renderEmpty(feed, "Autenticação do dashboard indisponível.");
@@ -2260,11 +2589,23 @@ const html = `<!DOCTYPE html>
           : "Sessão sem usuário";
 
         if (authPayload.mode !== "database") {
+          metrics.innerHTML = [
+            '<div class="settings-metric">modo legado</div>',
+            '<div class="settings-metric">bootstrap indisponível</div>',
+          ].join("");
           toggleButton.disabled = true;
           manageUserSelect.innerHTML = '<option value="">Modo legado</option>';
           renderEmpty(feed, "O dashboard está em modo legado de token. O gerenciamento de usuários no banco só aparece no modo database.");
           return;
         }
+
+        metrics.innerHTML = [
+          '<div class="settings-metric">usuário: ' + escapeHtml(currentUser?.username || "n/a") + '</div>',
+          '<div class="settings-metric">papel: ' + escapeHtml(currentUser?.role || "n/a") + '</div>',
+          '<div class="settings-metric">bootstrap: ' + escapeHtml(authState?.allowAdminBootstrap ? "on" : "off") + '</div>',
+          '<div class="settings-metric">usuários: ' + escapeHtml(authState?.usersCount || 0) + '</div>',
+          '<div class="settings-metric">permissões: ' + escapeHtml(currentPermissionList.length) + '</div>',
+        ].join("");
 
         toggleButton.disabled = false;
         toggleButton.textContent = authState?.allowAdminBootstrap
@@ -2307,9 +2648,11 @@ const html = `<!DOCTYPE html>
         const createUserForm = document.getElementById("create-user-form");
         const manageUserForm = document.getElementById("manage-user-form");
         const artifactFactoryForm = document.getElementById("artifact-factory-form");
+        const artifactEditorForm = document.getElementById("artifact-editor-form");
         createUserForm.style.display = canManageUsers ? "" : "none";
         manageUserForm.style.display = canManageUsers ? "" : "none";
         artifactFactoryForm.style.display = canManageArtifacts ? "" : "none";
+        artifactEditorForm.style.display = canManageArtifacts ? "" : "none";
 
         const userCards = users.length
           ? users.map((user) => \`
@@ -2411,7 +2754,14 @@ const html = `<!DOCTYPE html>
         });
 
         if (!response.ok) {
-          throw new Error("Falha na operação " + method + " " + url + ": " + response.status);
+          let details = "";
+          try {
+            const errorPayload = await response.json();
+            details = errorPayload?.error ? " - " + errorPayload.error : "";
+          } catch (_error) {
+            details = "";
+          }
+          throw new Error("Falha na operação " + method + " " + url + ": " + response.status + details);
         }
 
         return response.json();
@@ -2423,13 +2773,14 @@ const html = `<!DOCTYPE html>
         renderMessages(dashboardState.messages);
         renderTelegramView(dashboardState.messages);
         renderLogs(dashboardState.logs);
+        renderArtifacts(dashboardState.artifactCatalog);
         renderSettings(dashboardState.auth);
         applyViewState();
       };
 
       const refresh = async () => {
         try {
-          const [health, status, providers, messages, tasks, executions, logs, auth] = await Promise.all([
+          const [health, status, providers, messages, tasks, executions, logs, auth, artifactCatalog] = await Promise.all([
             fetchJson(endpoints.health),
             fetchJson(endpoints.status),
             fetchJson(endpoints.providers),
@@ -2438,6 +2789,7 @@ const html = `<!DOCTYPE html>
             fetchJson(endpoints.executions),
             fetchJson(endpoints.logs),
             fetchJson(endpoints.authState),
+            fetchJson(endpoints.delegationCatalog),
           ]);
 
           dashboardState.health = health;
@@ -2447,6 +2799,7 @@ const html = `<!DOCTYPE html>
           dashboardState.tasks = tasks;
           dashboardState.executions = executions;
           dashboardState.logs = logs;
+          dashboardState.artifactCatalog = artifactCatalog;
           dashboardState.auth = auth;
 
           applyPermissionState(auth);
@@ -2597,6 +2950,35 @@ const html = `<!DOCTYPE html>
           resultBox.textContent = error instanceof Error ? error.message : "Falha ao criar artifact";
         }
       });
+      document.getElementById("artifact-editor-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const resultBox = document.getElementById("artifact-editor-result");
+        const pathInput = document.getElementById("artifact-editor-path");
+        const contentInput = document.getElementById("artifact-editor-content");
+
+        if (!pathInput.value.trim()) {
+          resultBox.textContent = "Selecione um artifact antes de salvar.";
+          return;
+        }
+
+        try {
+          const payload = await sendJson(endpoints.delegationArtifactContent, "PUT", {
+            path: pathInput.value.trim(),
+            content: contentInput.value,
+          });
+
+          resultBox.textContent = payload.validation?.valid
+            ? "Manifest salvo com validação ok."
+            : "Manifest salvo com pendências de validação.";
+
+          const refreshedCatalog = await fetchJson(endpoints.delegationCatalog);
+          dashboardState.artifactCatalog = refreshedCatalog;
+          renderArtifacts(dashboardState.artifactCatalog);
+        } catch (error) {
+          resultBox.textContent = error instanceof Error ? error.message : "Falha ao salvar manifest";
+        }
+      });
       document.getElementById("task-form").addEventListener("submit", async (event) => {
         event.preventDefault();
 
@@ -2695,9 +3077,22 @@ const html = `<!DOCTYPE html>
         "log-filter-category",
         "execution-filter-status",
         "execution-filter-provider",
+        "artifact-filter-kind",
+        "artifact-filter-query",
       ].forEach((id) => {
         document.getElementById(id).addEventListener("input", rerenderFeeds);
         document.getElementById(id).addEventListener("change", rerenderFeeds);
+      });
+
+      document.getElementById("artifacts-feed").addEventListener("click", (event) => {
+        const card = event.target.closest("[data-artifact-path]");
+
+        if (!card) {
+          return;
+        }
+
+        dashboardState.activeArtifactPath = card.dataset.artifactPath || "";
+        renderArtifacts(dashboardState.artifactCatalog);
       });
 
       document.getElementById("view-nav").addEventListener("click", (event) => {
@@ -3099,6 +3494,11 @@ const server = createServer(async (request, response) => {
       }
 
       if (url === "/api/delegation/factory" && method === "POST" && !hasPermission(authContext, "manageArtifacts")) {
+        sendJson(response, 403, { error: "Forbidden" });
+        return;
+      }
+
+      if (url === "/api/delegation/artifact-content" && (method === "PUT" || method === "PATCH") && !hasPermission(authContext, "manageArtifacts")) {
         sendJson(response, 403, { error: "Forbidden" });
         return;
       }

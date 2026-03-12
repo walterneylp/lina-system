@@ -1,3 +1,5 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { LinaEnv } from "../config/env";
 import { AgentLoader } from "../core/agents/agent-loader";
@@ -28,6 +30,51 @@ const readBody = async (request: IncomingMessage): Promise<string> => {
   }
 
   return Buffer.concat(chunks).toString("utf8");
+};
+
+const normalizePath = (value: string): string => resolve(value);
+
+const isWithinAllowedRoots = (path: string, roots: string[]): boolean => {
+  const resolvedPath = normalizePath(path);
+  return roots.some((root) => {
+    const resolvedRoot = normalizePath(root);
+    return resolvedPath === resolvedRoot || resolvedPath.startsWith(`${resolvedRoot}/`);
+  });
+};
+
+const inferArtifactKindFromPath = (
+  path: string,
+  env: LinaEnv
+): "agent" | "sub-agent" | "skill" | null => {
+  const resolvedPath = normalizePath(path);
+
+  if (resolvedPath.startsWith(`${normalizePath(env.agentsDirectory)}/`) && resolvedPath.endsWith("/AGENT.md")) {
+    return "agent";
+  }
+
+  if (
+    resolvedPath.startsWith(`${normalizePath(env.subAgentsDirectory)}/`) &&
+    resolvedPath.endsWith("/SUB_AGENT.md")
+  ) {
+    return "sub-agent";
+  }
+
+  if (resolvedPath.startsWith(`${normalizePath(env.skillsDirectory)}/`) && resolvedPath.endsWith("/SKILL.md")) {
+    return "skill";
+  }
+
+  return null;
+};
+
+const getArtifactByPath = (dependencies: HttpServerDependencies, manifestPath: string) => {
+  const path = normalizePath(manifestPath);
+  const catalogs = [
+    ...dependencies.agentLoader.load(),
+    ...dependencies.subAgentLoader.load(),
+    ...dependencies.skillLoader.load(),
+  ];
+
+  return catalogs.find((item) => normalizePath(item.path) === path) || null;
 };
 
 export const startHttpServer = (dependencies: HttpServerDependencies) => {
@@ -198,6 +245,60 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
 
         response.writeHead(200, { "Content-Type": "application/json" });
         response.end(JSON.stringify(validation));
+        return;
+      }
+
+      if ((method === "PUT" || method === "PATCH") && url === "/delegation/artifact-content") {
+        const rawBody = await readBody(request);
+        const payload = JSON.parse(rawBody || "{}") as {
+          path?: string;
+          content?: string;
+        };
+
+        if (!payload.path || typeof payload.content !== "string") {
+          response.writeHead(400, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ error: "Missing `path` or `content` in request body." }));
+          return;
+        }
+
+        const allowedRoots = [
+          dependencies.env.agentsDirectory,
+          dependencies.env.subAgentsDirectory,
+          dependencies.env.skillsDirectory,
+        ];
+        const manifestPath = normalizePath(payload.path);
+
+        if (!isWithinAllowedRoots(manifestPath, allowedRoots)) {
+          response.writeHead(403, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ error: "Artifact path outside allowed roots." }));
+          return;
+        }
+
+        const kind = inferArtifactKindFromPath(manifestPath, dependencies.env);
+
+        if (!kind) {
+          response.writeHead(400, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ error: "Unsupported artifact manifest path." }));
+          return;
+        }
+
+        writeFileSync(manifestPath, payload.content, "utf8");
+        const validation = artifactValidator.validate(kind, manifestPath);
+        const artifact = getArtifactByPath(dependencies, manifestPath);
+
+        await dependencies.memoryManager.log(
+          validation.valid ? "info" : "warn",
+          `[delegation-editor] ${kind} ${manifestPath} (${validation.valid ? "valid" : "invalid"})`
+        );
+
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(
+          JSON.stringify({
+            artifact,
+            validation,
+            content: readFileSync(manifestPath, "utf8"),
+          })
+        );
         return;
       }
 

@@ -4,5 +4,7 @@ export type SkillMetadata = {
   path: string;
   version?: string;
   capabilities: string[];
+  accessibleBy: string[];
+  editableBy: string[];
   content?: string;
 };

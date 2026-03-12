@@ -25,6 +25,12 @@ export class SkillLoader {
           path: skillPath,
           version: asString(metadata.version, ""),
           capabilities: asStringArray(metadata.capabilities),
+          accessibleBy: asStringArray(metadata.accessible_by).length
+            ? asStringArray(metadata.accessible_by)
+            : ["LiNa"],
+          editableBy: asStringArray(metadata.editable_by).length
+            ? asStringArray(metadata.editable_by)
+            : ["Admin"],
           content,
         };
       });
