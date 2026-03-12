@@ -9,6 +9,7 @@ import { TelegramAuthorizedActor } from "./telegram-access-control";
 import { DashboardAuthStore } from "../../../dashboard/src/auth/dashboard-auth-store";
 import { DelegationArtifactFactory } from "../core/delegation/artifact-factory";
 import { DelegationArtifactKind } from "../core/delegation/artifact-factory.types";
+import { DelegationArtifactValidator } from "../core/delegation/artifact-validator";
 
 type TelegramCommandServiceOptions = {
   env: LinaEnv;
@@ -30,6 +31,7 @@ type ParsedCommand = {
 export class TelegramCommandService {
   private readonly dashboardAuthStore: DashboardAuthStore | null;
   private readonly artifactFactory: DelegationArtifactFactory;
+  private readonly artifactValidator: DelegationArtifactValidator;
 
   constructor(private readonly options: TelegramCommandServiceOptions) {
     this.dashboardAuthStore =
@@ -44,6 +46,11 @@ export class TelegramCommandService {
       subAgentsDirectory: options.env.subAgentsDirectory,
       skillsDirectory: options.env.skillsDirectory,
       templatesDirectory: "./.agents/templates",
+    });
+    this.artifactValidator = new DelegationArtifactValidator({
+      agentsDirectory: options.env.agentsDirectory,
+      subAgentsDirectory: options.env.subAgentsDirectory,
+      skillsDirectory: options.env.skillsDirectory,
     });
   }
 
@@ -318,6 +325,7 @@ export class TelegramCommandService {
       allowedSkills: kind === "skill" ? undefined : ["agent-skill-factory"],
       capabilities: kind === "skill" ? ["analysis"] : undefined,
     });
+    const validation = this.artifactValidator.validate(kind, artifact.manifestPath);
 
     await this.options.memoryManager.log(
       "info",
@@ -329,6 +337,10 @@ export class TelegramCommandService {
       `- tipo: ${artifact.kind}`,
       `- nome: ${artifact.name}`,
       `- manifest: ${artifact.manifestPath}`,
+      `- validação: ${validation.valid ? "ok" : "falhou"}`,
+      ...validation.checks
+        .filter((check) => !check.ok)
+        .map((check) => `  - ${check.label}: ${check.details}`),
     ].join("\n");
   }
 

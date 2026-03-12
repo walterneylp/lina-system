@@ -2,6 +2,7 @@ import { createServer, IncomingMessage, ServerResponse } from "node:http";
 import { LinaEnv } from "../config/env";
 import { AgentLoader } from "../core/agents/agent-loader";
 import { DelegationArtifactFactory } from "../core/delegation/artifact-factory";
+import { DelegationArtifactValidator } from "../core/delegation/artifact-validator";
 import { MemoryManager } from "../core/memory/memory-manager";
 import { LinaOrchestrator } from "../core/orchestrator/orchestrator";
 import { ProviderFactory } from "../core/providers/provider-factory";
@@ -35,6 +36,11 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
     subAgentsDirectory: dependencies.env.subAgentsDirectory,
     skillsDirectory: dependencies.env.skillsDirectory,
     templatesDirectory: "./.agents/templates",
+  });
+  const artifactValidator = new DelegationArtifactValidator({
+    agentsDirectory: dependencies.env.agentsDirectory,
+    subAgentsDirectory: dependencies.env.subAgentsDirectory,
+    skillsDirectory: dependencies.env.skillsDirectory,
   });
   const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
     try {
@@ -162,13 +168,36 @@ export const startHttpServer = (dependencies: HttpServerDependencies) => {
           rules: payload.rules,
           overwrite: payload.overwrite,
         });
+        const validation = artifactValidator.validate(payload.kind, artifact.manifestPath);
         await dependencies.memoryManager.log(
           "info",
           `Delegation artifact ${artifact.overwritten ? "updated" : "created"}: ${artifact.kind} ${artifact.name}`
         );
 
         response.writeHead(201, { "Content-Type": "application/json" });
-        response.end(JSON.stringify(artifact));
+        response.end(JSON.stringify({ artifact, validation }));
+        return;
+      }
+
+      if (method === "POST" && url === "/delegation/validate") {
+        const rawBody = await readBody(request);
+        const payload = JSON.parse(rawBody || "{}") as {
+          kind?: "agent" | "sub-agent" | "skill";
+          manifestPath?: string;
+        };
+
+        if (!payload.kind || !payload.manifestPath) {
+          response.writeHead(400, { "Content-Type": "application/json" });
+          response.end(
+            JSON.stringify({ error: "Missing `kind` or `manifestPath` in request body." })
+          );
+          return;
+        }
+
+        const validation = artifactValidator.validate(payload.kind, payload.manifestPath);
+
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(JSON.stringify(validation));
         return;
       }
 

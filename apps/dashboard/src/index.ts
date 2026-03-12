@@ -1491,6 +1491,35 @@ const html = `<!DOCTYPE html>
                 <button class="task-action" type="submit">Salvar usuário</button>
               </form>
             </section>
+
+            <section class="settings-card">
+              <h3>Factory de Artifacts</h3>
+              <p>Crie agents, sub-agents e skills diretamente do painel usando os templates oficiais da LiNa, com validação imediata do manifest gerado.</p>
+              <form class="settings-form" id="artifact-factory-form">
+                <label>
+                  Tipo
+                  <select id="artifact-kind" class="control">
+                    <option value="agent">agent</option>
+                    <option value="sub-agent">sub-agent</option>
+                    <option value="skill">skill</option>
+                  </select>
+                </label>
+                <label>
+                  Nome
+                  <input id="artifact-name" class="control" type="text" placeholder="ex: document-analyzer-specialist" required />
+                </label>
+                <label>
+                  Descrição
+                  <input id="artifact-description" class="control" type="text" placeholder="Descrição objetiva do artifact" required />
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;">
+                  <input id="artifact-overwrite" type="checkbox" />
+                  sobrescrever se já existir
+                </label>
+                <button class="task-action" type="submit">Criar artifact</button>
+              </form>
+              <div class="composer-result" id="artifact-factory-result">Nenhum artifact criado nesta sessão.</div>
+            </section>
           </div>
 
           <section class="settings-card" style="margin-bottom:18px;">
@@ -1532,6 +1561,7 @@ const html = `<!DOCTYPE html>
         tasks: "/api/tasks",
         executions: "/api/executions?limit=30",
         logs: "/api/logs?limit=30",
+        delegationFactory: "/api/delegation/factory",
         authState: "/dashboard/auth/state",
         authBootstrapToggle: "/dashboard/auth/bootstrap-toggle",
         authUsers: "/dashboard/auth/users",
@@ -1582,6 +1612,28 @@ const html = `<!DOCTYPE html>
           .map((item) => item.trim())
           .filter(Boolean);
 
+      const renderArtifactValidation = (payload) => {
+        const artifact = payload?.artifact;
+        const validation = payload?.validation;
+
+        if (!artifact) {
+          return "Nenhum artifact retornado.";
+        }
+
+        return [
+          (validation?.valid ? "Validação ok" : "Validação com pendências"),
+          "tipo: " + safeText(artifact.kind),
+          "nome: " + safeText(artifact.name),
+          "manifest: " + safeText(artifact.manifestPath),
+        ]
+          .concat(
+            (validation?.checks || []).map(
+              (check) => (check.ok ? "ok" : "erro") + " · " + safeText(check.label) + " · " + safeText(check.details)
+            )
+          )
+          .join("\n");
+      };
+
       const listEnabledPermissions = (permissions) =>
         Object.entries(permissions || {})
           .filter(([, enabled]) => Boolean(enabled))
@@ -1592,6 +1644,7 @@ const html = `<!DOCTYPE html>
           manageUsers: "Gerenciar usuários",
           manageBootstrap: "Controlar bootstrap",
           resetPasswords: "Resetar senhas",
+          manageArtifacts: "Gerenciar artifacts",
           runComposer: "Executar composer",
           manageTasks: "Gerenciar tarefas",
           viewLogs: "Ver logs",
@@ -1641,6 +1694,7 @@ const html = `<!DOCTYPE html>
 
         const canManageUsers = Boolean(permissions.manageUsers);
         const canManageBootstrap = Boolean(permissions.manageBootstrap);
+        const canManageArtifacts = Boolean(permissions.manageArtifacts);
         const canManageTasks = Boolean(permissions.manageTasks);
         const canRunComposer = Boolean(permissions.runComposer);
         const canViewLogs = Boolean(permissions.viewLogs);
@@ -1652,6 +1706,7 @@ const html = `<!DOCTYPE html>
 
         setElementVisibility("#create-user-form", canManageUsers);
         setElementVisibility("#manage-user-form", canManageUsers);
+        setElementVisibility("#artifact-factory-form", canManageArtifacts);
         setElementVisibility("#bootstrap-toggle-button", canManageBootstrap);
 
         setElementDisabled("#task-title", !canManageTasks);
@@ -1662,6 +1717,11 @@ const html = `<!DOCTYPE html>
         setElementDisabled("#composer-text", !canRunComposer);
         setElementDisabled("#composer-task", !canRunComposer);
         setElementDisabled('#composer-form button[type="submit"]', !canRunComposer);
+        setElementDisabled("#artifact-kind", !canManageArtifacts);
+        setElementDisabled("#artifact-name", !canManageArtifacts);
+        setElementDisabled("#artifact-description", !canManageArtifacts);
+        setElementDisabled("#artifact-overwrite", !canManageArtifacts);
+        setElementDisabled('#artifact-factory-form button[type="submit"]', !canManageArtifacts);
 
         if (dashboardState.activeView === "composer" && !canRunComposer) {
           dashboardState.activeView = "overview";
@@ -2042,6 +2102,7 @@ const html = `<!DOCTYPE html>
         const users = authPayload.users || [];
         const canManageUsers = Boolean(currentUser?.permissions?.manageUsers);
         const canManageBootstrap = Boolean(currentUser?.permissions?.manageBootstrap);
+        const canManageArtifacts = Boolean(currentUser?.permissions?.manageArtifacts);
         const currentPermissionList = listEnabledPermissions(currentUser?.permissions || {});
 
         pill.textContent = currentUser
@@ -2095,8 +2156,10 @@ const html = `<!DOCTYPE html>
 
         const createUserForm = document.getElementById("create-user-form");
         const manageUserForm = document.getElementById("manage-user-form");
+        const artifactFactoryForm = document.getElementById("artifact-factory-form");
         createUserForm.style.display = canManageUsers ? "" : "none";
         manageUserForm.style.display = canManageUsers ? "" : "none";
+        artifactFactoryForm.style.display = canManageArtifacts ? "" : "none";
 
         const userCards = users.length
           ? users.map((user) => \`
@@ -2349,6 +2412,32 @@ const html = `<!DOCTYPE html>
           await refresh();
         } catch (error) {
           document.getElementById("last-updated").textContent = error instanceof Error ? error.message : "Falha ao trocar senha";
+        }
+      });
+      document.getElementById("artifact-factory-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const kindInput = document.getElementById("artifact-kind");
+        const nameInput = document.getElementById("artifact-name");
+        const descriptionInput = document.getElementById("artifact-description");
+        const overwriteInput = document.getElementById("artifact-overwrite");
+        const resultBox = document.getElementById("artifact-factory-result");
+
+        try {
+          const payload = await sendJson(endpoints.delegationFactory, "POST", {
+            kind: kindInput.value,
+            name: nameInput.value.trim(),
+            description: descriptionInput.value.trim(),
+            overwrite: Boolean(overwriteInput.checked),
+          });
+
+          resultBox.textContent = renderArtifactValidation(payload);
+          nameInput.value = "";
+          descriptionInput.value = "";
+          overwriteInput.checked = false;
+          await refresh();
+        } catch (error) {
+          resultBox.textContent = error instanceof Error ? error.message : "Falha ao criar artifact";
         }
       });
       document.getElementById("task-form").addEventListener("submit", async (event) => {
@@ -2831,6 +2920,11 @@ const server = createServer(async (request, response) => {
       }
 
       if (((url === "/api/tasks" && method === "POST") || (url.startsWith("/api/tasks/") && method === "PATCH")) && !hasPermission(authContext, "manageTasks")) {
+        sendJson(response, 403, { error: "Forbidden" });
+        return;
+      }
+
+      if (url === "/api/delegation/factory" && method === "POST" && !hasPermission(authContext, "manageArtifacts")) {
         sendJson(response, 403, { error: "Forbidden" });
         return;
       }

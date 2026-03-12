@@ -6,6 +6,7 @@ export type DashboardPermissionSet = {
   manageUsers: boolean;
   manageBootstrap: boolean;
   resetPasswords: boolean;
+  manageArtifacts: boolean;
   runComposer: boolean;
   manageTasks: boolean;
   viewLogs: boolean;
@@ -19,6 +20,7 @@ const ROLE_PERMISSIONS: Record<DashboardRole, DashboardPermissionSet> = {
     manageUsers: true,
     manageBootstrap: true,
     resetPasswords: true,
+    manageArtifacts: true,
     runComposer: true,
     manageTasks: true,
     viewLogs: true,
@@ -30,6 +32,7 @@ const ROLE_PERMISSIONS: Record<DashboardRole, DashboardPermissionSet> = {
     manageUsers: false,
     manageBootstrap: false,
     resetPasswords: false,
+    manageArtifacts: false,
     runComposer: true,
     manageTasks: true,
     viewLogs: true,
@@ -41,6 +44,7 @@ const ROLE_PERMISSIONS: Record<DashboardRole, DashboardPermissionSet> = {
     manageUsers: false,
     manageBootstrap: false,
     resetPasswords: false,
+    manageArtifacts: false,
     runComposer: false,
     manageTasks: false,
     viewLogs: true,
